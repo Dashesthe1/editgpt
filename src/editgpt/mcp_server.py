@@ -101,7 +101,7 @@ def build_server():
         return _RUNTIME.stop()
 
     @mcp.tool(structured_output=False)
-    def eyes_latest_frame(max_width: int = 1280, jpeg_quality: int = 88) -> list[str | Image]:
+    def eyes_latest_frame(max_width: int = 1280, jpeg_quality: int = 88) -> list[Any]:
         """Return the newest retained screen frame as model-visible JPEG evidence."""
         frame = _RUNTIME.latest_frame()
         metadata = json.dumps(_frame_metadata(frame), separators=(",", ":"))
@@ -116,14 +116,14 @@ def build_server():
         stride: int = 1,
         max_width: int = 960,
         jpeg_quality: int = 85,
-    ) -> list[str | Image]:
+    ) -> list[Any]:
         """Return a small chronological sequence of recent frames for temporal reasoning."""
         if count < 1 or count > 8:
             raise ValueError("count must be between 1 and 8")
         frames = _RUNTIME.recent_frames(count=count, stride=stride)
         if not frames:
             raise RuntimeError("no live frames are available")
-        content: list[str | Image] = []
+        content: list[Any] = []
         for frame in frames:
             content.append(json.dumps(_frame_metadata(frame), separators=(",", ":")))
             content.append(
@@ -139,7 +139,7 @@ def build_server():
         frame_id: int,
         max_width: int = 1280,
         jpeg_quality: int = 90,
-    ) -> list[str | Image]:
+    ) -> list[Any]:
         """Return one exact retained frame by EditGPT frame ID."""
         frame = _RUNTIME.service.buffer.get(frame_id)
         if frame is None:
