@@ -12,7 +12,7 @@ from .types import FramePacket, MotionObservation
 class EyesService:
     """Backend-neutral visual evidence service for GPT-facing tooling."""
 
-    def __init__(self, *, buffer_capacity: int = 600) -> None:
+    def __init__(self, *, buffer_capacity: int = 30) -> None:
         self.buffer = FrameBuffer(capacity=buffer_capacity)
 
     def ingest(self, frame: FramePacket) -> None:
