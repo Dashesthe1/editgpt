@@ -14,8 +14,11 @@ dependencies = [
 
 [project.optional-dependencies]
 capture = [
-  "dxcam>=0.1.0",
+  "dxcam>=0.3.0",
   "opencv-python>=4.10",
+]
+mcp = [
+  "mcp>=2,<3",
 ]
 dev = [
   "pytest>=8.0",
@@ -23,6 +26,7 @@ dev = [
 
 [project.scripts]
 editgpt-eyes = "editgpt.cli:main"
+editgpt-eyes-mcp = "editgpt.mcp_server:main"
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
