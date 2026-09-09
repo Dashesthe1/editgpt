@@ -1,25 +1,34 @@
 $ErrorActionPreference = "Stop"
 
+function Invoke-Checked {
+    param(
+        [Parameter(Mandatory=$true)][scriptblock]$Command,
+        [Parameter(Mandatory=$true)][string]$FailureMessage
+    )
+
+    & $Command
+    if ($LASTEXITCODE -ne 0) {
+        throw "$FailureMessage (exit code $LASTEXITCODE)"
+    }
+}
+
 Write-Host "EditGPT Eyes v0.1 Windows bootstrap"
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python launcher 'py' was not found. Install Python 3.12 first."
 }
 
-py -3.12 -c "import sys; print(sys.version)" | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    throw "Python 3.12 is required for the current Eyes toolchain."
-}
+Invoke-Checked { py -3.12 -c "import sys; print(sys.version)" } "Python 3.12 is required for the current Eyes toolchain."
 
 if (-not (Test-Path ".venv")) {
-    py -3.12 -m venv .venv
+    Invoke-Checked { py -3.12 -m venv .venv } "Failed to create the Python virtual environment."
 }
 
 $Python = Join-Path $PWD ".venv\Scripts\python.exe"
-& $Python -m pip install --upgrade pip
-& $Python -m pip install -e ".[capture,mcp,dev]"
-& $Python -m pytest
-& $Python scripts/check_env.py
+Invoke-Checked { & $Python -m pip install --upgrade pip } "pip upgrade failed."
+Invoke-Checked { & $Python -m pip install -e ".[capture,mcp,dev]" } "EditGPT dependency installation failed."
+Invoke-Checked { & $Python -m pytest } "EditGPT tests failed. Bootstrap stopped before claiming success."
+Invoke-Checked { & $Python scripts/check_env.py } "Environment probe failed."
 
 Write-Host ""
 Write-Host "Bootstrap complete."
