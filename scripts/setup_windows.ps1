@@ -23,5 +23,5 @@ $Python = Join-Path $PWD ".venv\Scripts\python.exe"
 
 Write-Host ""
 Write-Host "Bootstrap complete."
-Write-Host "With After Effects visible, run:"
+Write-Host "Run the command below, then switch to After Effects during the 5-second delay and start the Composition preview:"
 Write-Host ".\.venv\Scripts\editgpt-eyes.exe capture --seconds 5 --fps 60"
