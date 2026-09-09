@@ -3,17 +3,27 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from pathlib import Path
 
+import cv2
 import dxcam
 
 
-def run_phase(*, fps: int, seconds: float, video_mode: bool, monitor_index: int) -> dict[str, object]:
+def run_phase(
+    *,
+    fps: int,
+    seconds: float,
+    video_mode: bool,
+    monitor_index: int,
+    image_path: Path,
+) -> dict[str, object]:
     camera = dxcam.create(output_idx=monitor_index, output_color="BGR")
     seen = 0
     unique_timestamps = 0
     previous_timestamp: float | None = None
     first_timestamp: float | None = None
     last_timestamp: float | None = None
+    latest_frame = None
     started = time.perf_counter()
 
     try:
@@ -23,6 +33,7 @@ def run_phase(*, fps: int, seconds: float, video_mode: bool, monitor_index: int)
             frame, timestamp = camera.get_latest_frame(with_timestamp=True)
             if frame is None:
                 continue
+            latest_frame = frame
             seen += 1
             if timestamp is not None:
                 ts = float(timestamp)
@@ -35,6 +46,11 @@ def run_phase(*, fps: int, seconds: float, video_mode: bool, monitor_index: int)
     finally:
         camera.stop()
         camera.release()
+
+    image_saved = False
+    if latest_frame is not None:
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        image_saved = bool(cv2.imwrite(str(image_path), latest_frame))
 
     wall_s = max(1e-9, time.perf_counter() - started)
     present_span_s = 0.0
@@ -53,6 +69,8 @@ def run_phase(*, fps: int, seconds: float, video_mode: bool, monitor_index: int)
         "unique_present_timestamps": unique_timestamps,
         "present_span_s": present_span_s,
         "unique_present_fps": unique_present_fps,
+        "image_saved": image_saved,
+        "image_path": str(image_path) if image_saved else None,
     }
 
 
@@ -62,10 +80,18 @@ def main() -> int:
     parser.add_argument("--seconds", type=float, default=3.0)
     parser.add_argument("--delay", type=float, default=5.0)
     parser.add_argument("--monitor-index", type=int, default=0)
+    parser.add_argument(
+        "--output-dir",
+        default="artifacts/capture-mode-probe",
+        help="directory for result.json and one final frame from each phase",
+    )
     args = parser.parse_args()
 
     if args.fps <= 0 or args.seconds <= 0 or args.delay < 0:
         raise SystemExit("fps/seconds must be positive and delay must be non-negative")
+
+    output = Path(args.output_dir)
+    output.mkdir(parents=True, exist_ok=True)
 
     print(f"Capture diagnostic starts in {args.delay:g} seconds. Switch to After Effects and keep the preview playing.")
     time.sleep(args.delay)
@@ -75,12 +101,14 @@ def main() -> int:
         seconds=args.seconds,
         video_mode=False,
         monitor_index=args.monitor_index,
+        image_path=output / "truthful_latest.jpg",
     )
     paced = run_phase(
         fps=args.fps,
         seconds=args.seconds,
         video_mode=True,
         monitor_index=args.monitor_index,
+        image_path=output / "paced_latest.jpg",
     )
 
     paced_fps = float(paced["consumer_fps"])
@@ -99,8 +127,11 @@ def main() -> int:
         "truthful": truthful,
         "paced": paced,
         "interpretation": interpretation,
+        "output_dir": str(output),
     }
+    (output / "result.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
     print(json.dumps(result, indent=2))
+    print(f"Evidence written to: {output.resolve()}")
     return 0
 
 
