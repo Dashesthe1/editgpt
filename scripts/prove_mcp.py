@@ -4,9 +4,24 @@ import argparse
 import asyncio
 import base64
 import json
+import socket
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from mcp import Client
+
+
+def _listener_available(url: str, timeout_s: float = 1.0) -> bool:
+    parsed = urlsplit(url)
+    host = parsed.hostname
+    if not host:
+        return False
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        with socket.create_connection((host, port), timeout=timeout_s):
+            return True
+    except OSError:
+        return False
 
 
 async def prove(url: str, fps: int, seconds: float, delay: float) -> int:
@@ -14,6 +29,12 @@ async def prove(url: str, fps: int, seconds: float, delay: float) -> int:
     output.mkdir(parents=True, exist_ok=True)
 
     print(f"Connecting to {url}")
+    if not _listener_available(url):
+        print("ERROR: No EditGPT Eyes MCP server is listening at that address.")
+        print("Start it in a separate PowerShell window and leave that window running:")
+        print(r"  .\.venv\Scripts\editgpt-eyes-mcp.exe --transport streamable-http --host 127.0.0.1 --port 8765")
+        return 8
+
     async with Client(url) as client:
         tools = await client.list_tools()
         tool_names = sorted(tool.name for tool in tools.tools)
