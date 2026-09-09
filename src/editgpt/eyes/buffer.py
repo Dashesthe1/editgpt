@@ -10,7 +10,7 @@ from .types import FramePacket
 class FrameBuffer:
     """Thread-safe bounded frame history with monotonic identity checks."""
 
-    def __init__(self, capacity: int = 600) -> None:
+    def __init__(self, capacity: int = 30) -> None:
         if capacity <= 0:
             raise ValueError("capacity must be positive")
         self._frames: deque[FramePacket] = deque(maxlen=capacity)
