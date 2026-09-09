@@ -20,32 +20,44 @@ The target stack is intentionally capability-first and local/no-recurring-infere
 
 The codebase exposes these systems through a stable Eyes API so GPT never needs to know which backend produced an observation.
 
-## First runnable proof
+## Proven live-capture baseline
 
-The first proof deliberately starts smaller than the final stack:
+The first real After Effects proof passed on Windows:
 
-1. Capture newly presented Windows frames with DXcam.
-2. Timestamp and retain them in an exact bounded frame buffer.
-3. Keep the hot capture path lightweight so analysis does not starve ingestion.
-4. Compute only a tiny downsampled activity probe during capture.
-5. Save one visual sample per second after capture completes.
-6. Expose structured observations through `EyesService`.
-7. Validate timing, buffer correctness, and backend substitution with tests.
+- target rate: **60 fps**
+- newly presented frames observed: **55.59 fps**
+- target-rate ratio: **92.65%**
+- screen activity: **active**
+- diagnostic: **capture_rate_healthy**
+- six saved visual samples confirmed that the captured image followed the moving After Effects preview rather than a stale desktop frame.
 
-Then the high-capability semantic/tracking backends are plugged into the same API one at a time and tested against real footage.
+DXcam remains in `video_mode=False` for truthful newly presented-frame timing. The hot capture loop keeps expensive analysis and JPEG work out of ingestion.
 
-## Development
+## Local Eyes MCP
+
+The live-capture proof unlocked the next architecture milestone: a dedicated EditGPT Eyes MCP. The development server intentionally binds to loopback by default and exposes:
+
+- `eyes_start_live`
+- `eyes_status`
+- `eyes_stop_live`
+- `eyes_latest_frame`
+- `eyes_recent_frames`
+- `eyes_frame`
+- `eyes_motion_between`
+
+The MCP uses the official MCP Python SDK v2 and can return actual JPEG frames as model-visible image content. Do not expose this development server publicly without adding the protected transport/authentication layer first.
+
+## Development / refresh
 
 ```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -U pip
-pip install -e ".[capture,dev]"
-pytest
-python scripts/check_env.py
+cd $HOME\editgpt
+git pull
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 ```
 
-## First live After Effects proof
+The bootstrap creates/updates the virtual environment, installs capture + MCP + test dependencies, runs the tests, and reports NVIDIA GPU model/VRAM so the strongest practical Qwen3-VL configuration can be selected next.
+
+## Live capture proof
 
 Open After Effects with moving footage ready in the Composition viewer. From PowerShell run:
 
@@ -55,9 +67,15 @@ Open After Effects with moving footage ready in the Composition viewer. From Pow
 
 The command waits five seconds before capture begins. During that delay, switch to After Effects and start the Composition preview. Keep After Effects visible for the five-second capture window.
 
-Evidence is written to `artifacts/eyes-live-proof/` as a JSON summary plus one JPEG sample per second. The summary distinguishes the target rate, newly presented frame rate, screen activity, and likely failure mode.
+Evidence is written to `artifacts/eyes-live-proof/` as a JSON summary plus one JPEG sample per second.
 
-DXcam is intentionally used with `video_mode=False` in this proof. That means it reports newly rendered/presented frames rather than fabricating duplicate frames simply to satisfy the requested cadence.
+## Local MCP proof
+
+```powershell
+.\.venv\Scripts\editgpt-eyes-mcp.exe --transport streamable-http --host 127.0.0.1 --port 8765
+```
+
+The local MCP endpoint is `http://127.0.0.1:8765/mcp`. This is a local development proof only; the ChatGPT-facing route will be added after the local server surface is validated.
 
 ## Design rule
 
