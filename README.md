@@ -22,20 +22,31 @@ The codebase exposes these systems through a stable Eyes API so GPT never needs 
 
 ## Proven live-capture baseline
 
-The first real After Effects proof passed on Windows:
+The Windows + After Effects capture layer is proven.
+
+Initial proof:
 
 - target rate: **60 fps**
 - newly presented frames observed: **55.59 fps**
 - target-rate ratio: **92.65%**
 - screen activity: **active**
 - diagnostic: **capture_rate_healthy**
-- six saved visual samples confirmed that the captured image followed the moving After Effects preview rather than a stale desktop frame.
 
-DXcam remains in `video_mode=False` for truthful newly presented-frame timing. The hot capture loop keeps expensive analysis and JPEG work out of ingestion.
+Follow-up two-mode diagnostic:
 
-## Local Eyes MCP
+- truthful consumer rate: **56.68 fps**
+- truthful unique-present rate: **57.00 fps**
+- paced consumer rate: **59.38 fps**
+- paced unique-present rate: **58.42 fps**
+- interpretation: **capture_pipeline_and_unique_present_rate_healthy**
 
-The live-capture proof unlocked the next architecture milestone: a dedicated EditGPT Eyes MCP. The development server intentionally binds to loopback by default and exposes:
+Saved frames from both phases visibly followed different moments of the actual After Effects preview. The earlier ~40 fps MCP run therefore was not a structural capture ceiling.
+
+DXcam remains in `video_mode=False` for production Eyes so EditGPT preserves truthful newly presented-frame timing. `video_mode=True` is diagnostic only.
+
+## Proven local Eyes MCP
+
+The dedicated local EditGPT Eyes MCP is working end-to-end. The development server binds to loopback by default and exposes:
 
 - `eyes_start_live`
 - `eyes_status`
@@ -45,7 +56,51 @@ The live-capture proof unlocked the next architecture milestone: a dedicated Edi
 - `eyes_frame`
 - `eyes_motion_between`
 
-The MCP uses the official MCP Python SDK v2 and can return actual JPEG frames as model-visible image content. Do not expose this development server publicly without adding the protected transport/authentication layer first.
+A local MCP client successfully discovered all seven tools, started capture, read status, retrieved a real JPEG frame, and stopped capture. The MCP uses the official MCP Python SDK v2. Do not expose this development server publicly without adding the protected transport/authentication layer first.
+
+## Semantic Eyes stage
+
+The next capability under test is local semantic sight.
+
+Detected workstation hardware:
+
+- NVIDIA RTX A4500
+- approximately 20 GB VRAM
+
+For the live semantic eye, the current target is **Qwen3-VL-8B-Instruct Q8_0** through `llama.cpp`. This is intentionally higher fidelity than Q4 while still leaving practical GPU headroom for After Effects, the vision projector, context/KV cache, and later Eyes services. The 30B Q4 model remains a candidate for a slower deep-inspection mode, but it is too close to the workstation's total VRAM to make it the default live model while AE is active.
+
+Set up the local semantic runtime:
+
+```powershell
+cd $HOME\editgpt
+git pull
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_semantic_windows.ps1
+```
+
+Then start Qwen in PowerShell window 1:
+
+```powershell
+llama serve -hf Qwen/Qwen3-VL-8B-Instruct-GGUF:Q8_0 --host 127.0.0.1 --port 8080 -ngl 99 -c 8192
+```
+
+The first launch downloads the official Qwen GGUF model and vision projector. Leave that server running.
+
+In PowerShell window 2, prove semantic interpretation against the truthful AE frame captured by the prior diagnostic:
+
+```powershell
+cd $HOME\editgpt
+.\.venv\Scripts\python.exe .\scripts\prove_semantic.py
+```
+
+Evidence is written to:
+
+```text
+artifacts/semantic-proof/
+  source.jpg
+  semantic_result.json
+```
+
+This stage is not considered passed merely because the model returns text. We inspect whether it accurately identifies the application, visible footage, subjects/objects, composition, readable UI state, editing-relevant details, and uncertainty without inventing temporal information that a single frame cannot support.
 
 ## Development / refresh
 
@@ -55,7 +110,7 @@ git pull
 powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
 ```
 
-The bootstrap creates/updates the virtual environment, installs capture + MCP + test dependencies, runs the tests, and reports NVIDIA GPU model/VRAM so the strongest practical Qwen3-VL configuration can be selected next.
+The bootstrap creates/updates the virtual environment, installs capture + MCP + test dependencies, runs the tests, and reports NVIDIA GPU model/VRAM.
 
 ## Live capture proof
 
@@ -83,9 +138,7 @@ Leave it running. In PowerShell window 2, run:
 .\.venv\Scripts\python.exe .\scripts\prove_mcp.py
 ```
 
-The client waits five seconds before starting live capture so you can switch to After Effects and play the Composition preview. It validates the MCP tool list, starts Eyes through MCP, retrieves status, requests a real model-visible JPEG frame, stops Eyes, and writes proof files to `artifacts/eyes-mcp-proof/`.
-
-The local MCP endpoint is `http://127.0.0.1:8765/mcp`. This is a local development proof only; the ChatGPT-facing route will be added after the local server surface is validated.
+The local MCP endpoint is `http://127.0.0.1:8765/mcp`.
 
 ## Design rule
 
