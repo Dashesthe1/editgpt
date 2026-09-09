@@ -17,11 +17,14 @@ if (-not (Test-Path ".venv")) {
 
 $Python = Join-Path $PWD ".venv\Scripts\python.exe"
 & $Python -m pip install --upgrade pip
-& $Python -m pip install -e ".[capture,dev]"
+& $Python -m pip install -e ".[capture,mcp,dev]"
 & $Python -m pytest
 & $Python scripts/check_env.py
 
 Write-Host ""
 Write-Host "Bootstrap complete."
-Write-Host "Run the command below, then switch to After Effects during the 5-second delay and start the Composition preview:"
+Write-Host "Live capture proof:"
 Write-Host ".\.venv\Scripts\editgpt-eyes.exe capture --seconds 5 --fps 60"
+Write-Host ""
+Write-Host "Local-only Eyes MCP proof:"
+Write-Host ".\.venv\Scripts\editgpt-eyes-mcp.exe --transport streamable-http --host 127.0.0.1 --port 8765"
