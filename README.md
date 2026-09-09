@@ -71,9 +71,19 @@ Evidence is written to `artifacts/eyes-live-proof/` as a JSON summary plus one J
 
 ## Local MCP proof
 
+In PowerShell window 1, start the local server:
+
 ```powershell
 .\.venv\Scripts\editgpt-eyes-mcp.exe --transport streamable-http --host 127.0.0.1 --port 8765
 ```
+
+Leave it running. In PowerShell window 2, run:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\prove_mcp.py
+```
+
+The client waits five seconds before starting live capture so you can switch to After Effects and play the Composition preview. It validates the MCP tool list, starts Eyes through MCP, retrieves status, requests a real model-visible JPEG frame, stops Eyes, and writes proof files to `artifacts/eyes-mcp-proof/`.
 
 The local MCP endpoint is `http://127.0.0.1:8765/mcp`. This is a local development proof only; the ChatGPT-facing route will be added after the local server surface is validated.
 
