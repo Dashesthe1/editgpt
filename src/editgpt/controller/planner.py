@@ -104,8 +104,8 @@ class PlannedAction:
             raise ValueError("planner key chord is too large")
         if action == "keypress" and not keys:
             raise ValueError("planned keypress requires keys")
-        if safe_mode and action == "keypress" and keys not in {("ESC",), ("ESCAPE",)}:
-            raise PermissionError("safe controller mode only permits Escape keypresses")
+        if safe_mode and action == "keypress" and keys not in {("ESC",), ("ESCAPE",), ("LEFT",), ("RIGHT",), ("UP",), ("DOWN",), ("HOME",)}:
+            raise PermissionError("safe controller mode only permits navigation/Escape keypresses")
 
         typed = payload.get("text")
         typed_text = None if typed is None else str(typed)
@@ -212,9 +212,11 @@ reason: concise reasoning grounded in the visible UI and history
 Rules:
 - Never output screen coordinates; targeting is grounded separately.
 - Use status=done only when the visible UI AND history show the whole goal is complete.
+- The expected field must contain ONLY a concrete visible UI state, never meta claims such as no further action is needed or the goal is complete.
 - Follow ordered requirements in the goal; do not skip earlier requested steps just because a later state is visible.
 - Use status=blocked if the necessary target/state is not visually clear enough.
 - Prefer one simple reversible UI action at a time.
+- If a top-level menu dropdown is already open and the goal needs an adjacent top-level menu, prefer LEFT/RIGHT keypress navigation over repeatedly clicking another menu label.
 """
     observation = client.observe(
         image,
@@ -257,7 +259,7 @@ def verify_visible_state(
         prompt=(
             "Inspect only the visible Adobe After Effects UI. Decide whether this statement is visibly true: "
             f"{statement}\nReturn ONLY JSON with keys matches (boolean), confidence (0..1), and reason. "
-            "Do not infer hidden state."
+            "Do not infer hidden state. Evaluate only the concrete visible-state claim and ignore meta wording about completion. A menu or dropdown being open may itself be the required final state; never require it to close unless the statement explicitly says it must be closed."
         ),
         source=source,
         max_tokens=120,
