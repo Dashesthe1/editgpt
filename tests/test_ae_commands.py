@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from editgpt.controller.ae_commands import AE_COMMANDS, get_ae_command
+from editgpt.controller.ae_commands import AE_COMMANDS, command_keys_for_goal, get_ae_command
 from editgpt.controller.edit_task import EditingTaskContract, classify_mutation_kinds
 from editgpt.controller.live_loop import LiveController
 from editgpt.controller.planner import PlannedAction
@@ -43,6 +43,32 @@ def test_registry_contains_direct_reveal_mask_and_quick_apply_commands() -> None
     assert get_ae_command("property.position.reveal").steps[0].keys == ("P",)
     assert get_ae_command("mask.new").steps[0].keys == ("CTRL", "SHIFT", "N")
     assert get_ae_command("quick_apply.open").steps[0].keys == ("CTRL", "ENTER")
+
+
+def test_registry_is_broad_cross_milestone_surface() -> None:
+    assert len(AE_COMMANDS) >= 140
+    domains = {recipe.domain for recipe in AE_COMMANDS.values()}
+    assert {
+        "panel", "tool", "composition", "time", "preview", "view", "footage",
+        "effect", "layer", "property", "mask", "keyframe", "text", "3d",
+    }.issubset(domains)
+    for key, recipe in AE_COMMANDS.items():
+        assert recipe.key == key
+        assert recipe.steps
+        assert recipe.impact in {"reversible_ui", "project_mutation", "destructive"}
+
+
+def test_goal_filter_surfaces_relevant_commands_without_dumping_whole_registry() -> None:
+    mask_keys = command_keys_for_goal("Create a mask on the hero and reveal its mask path")
+    assert "mask.new" in mask_keys
+    assert "property.mask_path.reveal" in mask_keys
+    assert "quick_apply.open" in mask_keys
+    assert len(mask_keys) <= 32
+    assert len(mask_keys) < len(AE_COMMANDS)
+
+    timing_keys = command_keys_for_goal("Split the selected shot and reverse the second layer in time")
+    assert "layer.split" in timing_keys
+    assert "layer.reverse_time" in timing_keys
 
 
 def test_planner_parser_accepts_known_reversible_command_in_safe_mode() -> None:
@@ -96,6 +122,16 @@ def test_mask_command_is_scoped_as_mask_mutation() -> None:
         target_terms=("hero layer",),
     )
     assert contract.authorize(plan, committed_mutations=0).allowed is True
+
+
+def test_time_remap_command_declares_every_mutation_kind_it_can_create() -> None:
+    plan = _command_plan(
+        "layer.time_remap.enable",
+        target="selected hero layer",
+        expected="Time Remap is enabled and keyframes are visible on the selected hero layer",
+    )
+    assert classify_action_impact(plan) == "project_mutation"
+    assert classify_mutation_kinds(plan) == ("layer_timing", "keyframe")
 
 
 def test_mask_command_fails_closed_under_wrong_mutation_scope() -> None:
