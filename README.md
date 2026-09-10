@@ -105,6 +105,18 @@ The planner now prefers registered AE commands before pointer navigation. Becaus
 
 The live controller proof completes an ordered File -> Edit menu task from visual state and action history rather than a fixed macro. A deterministic Task Policy gate now classifies each planned action as reversible UI, project mutation, destructive, or ambiguous before Hands can execute it; ambiguous and unauthorized impacts fail closed. It also demonstrated recovery: when one Edit click did not produce the expected dropdown, the verifier rejected the result and the next loop re-observed and retried before declaring completion. Controller v1 also plans and executes semantically grounded reversible drags: a live proof moved the timeline playhead from 00s to 02s, verified the result visually, and then restored the playhead. See `docs/CONTROLLER_V1.md`.
 
+## M4 live transaction gate
+
+M4 now has a dedicated rollback-first real-AE proof at `scripts/prove_m4_transaction.py` and a first-class launcher action:
+
+```powershell
+.\editgpt.ps1 -Action proof-m4
+```
+
+The gate uses the registered native `layer.new.null` command as a bounded `layer_structure` mutation. It first forces visual verification failure and requires the controller-owned Undo path to restore the baseline. Only after that rollback succeeds does it prove a committed mutation, then clean up that committed proof mutation and verify the final visible state against the original baseline. The proof also requires the same `AfterFX.exe` process ID at the beginning and end.
+
+M4 is not considered complete until the live proof writes `artifacts/m4-live-proof/proof.json` with `ok: true`. The software path and PowerShell entrypoint are covered by Windows CI; the real workstation execution is a separate gate.
+
 ## Semantic Eyes stage
 
 The next perception capability under test is local semantic sight.
@@ -155,6 +167,7 @@ Run the current proofs with:
 .\editgpt.ps1 -Action proof-hands-ui
 .\editgpt.ps1 -Action proof-controller
 .\editgpt.ps1 -Action proof-drag
+.\editgpt.ps1 -Action proof-m4
 .\editgpt.ps1 -Action proof-semantic
 ```
 
