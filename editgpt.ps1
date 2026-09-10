@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic", "logs")]
+    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic", "logs")]
     [string]$Action = "up",
     [ValidateSet("eyes_mcp", "hands_mcp", "semantic_qwen")]
     [string]$Service = "eyes_mcp",
@@ -125,6 +125,9 @@ switch ($Action) {
     }
     "proof-loop" {
         Invoke-Checked { & $ControlExe proof loop } "Observe-act-verify proof failed."
+    }
+    "proof-semantic-pointer" {
+        Invoke-Checked { & $ControlExe proof semantic-pointer } "Semantic pointer proof failed."
     }
     "proof-semantic" {
         Invoke-Checked { & $ControlExe proof semantic } "Semantic proof failed."

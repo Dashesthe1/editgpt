@@ -75,7 +75,7 @@ Current Hands contract:
 - accepts a compact computer-use-style action object so hosted or local controllers can share the same execution surface;
 - keeps screenshots and visual reasoning in Eyes.
 
-The live Hands proof is non-destructive. The paired controller bridge now also normalizes DPI to physical pixels, exposes Eyes encoded/capture geometry, safely maps model-visible coordinates to screen coordinates, and fails closed when multi-monitor geometry is ambiguous.
+The live Hands proof is non-destructive. The paired controller bridge now also normalizes DPI to physical pixels, exposes Eyes encoded/capture geometry, safely maps model-visible coordinates to screen coordinates, fails closed when multi-monitor geometry is ambiguous, and can use local Qwen3-VL to choose a visible UI target before Hands moves to it.
 
 ## Semantic Eyes stage
 
@@ -122,6 +122,7 @@ Run the current proofs with:
 .\editgpt.ps1 -Action proof-mcp
 .\editgpt.ps1 -Action proof-hands
 .\editgpt.ps1 -Action proof-loop
+.\editgpt.ps1 -Action proof-semantic-pointer
 .\editgpt.ps1 -Action proof-semantic
 ```
 

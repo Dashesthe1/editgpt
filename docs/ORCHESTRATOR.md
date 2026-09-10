@@ -36,6 +36,7 @@ From the repository root on Windows:
 .\editgpt.ps1 -Action proof-mcp
 .\editgpt.ps1 -Action proof-hands
 .\editgpt.ps1 -Action proof-loop
+.\editgpt.ps1 -Action proof-semantic-pointer
 .\editgpt.ps1 -Action proof-semantic
 
 # Read service logs
@@ -104,4 +105,4 @@ Proof outputs remain under `artifacts/`.
 
 ## Next automation checkpoint
 
-The first paired Eyes + Hands loop is now proven with physical-pixel coordinate normalization and post-action observation. The next checkpoint is semantic action selection from the Eyes frame rather than a fixed proof target. Keep the local services provider-independent so native ChatGPT/Codex computer use or a hosted Responses API computer-use model can be swapped in without redesigning the desktop layer.
+The paired Eyes + Hands loop is proven with physical-pixel coordinate normalization and post-action observation. Local Qwen semantic pointing is also proven on the live AE frame; the next checkpoint is a guarded real UI action with verification rather than pointer movement only. Keep the local services provider-independent so native ChatGPT/Codex computer use or a hosted Responses API computer-use model can be swapped in without redesigning the desktop layer.
