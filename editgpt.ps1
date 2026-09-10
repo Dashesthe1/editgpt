@@ -1,7 +1,7 @@
 param(
-    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-semantic", "logs")]
+    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-semantic", "logs")]
     [string]$Action = "up",
-    [ValidateSet("eyes_mcp", "semantic_qwen")]
+    [ValidateSet("eyes_mcp", "hands_mcp", "semantic_qwen")]
     [string]$Service = "eyes_mcp",
     [switch]$NoUpdate,
     [switch]$ForceBootstrap,
@@ -110,7 +110,10 @@ switch ($Action) {
         Invoke-Checked { & $ControlExe proof capture } "Capture proof failed."
     }
     "proof-mcp" {
-        Invoke-Checked { & $ControlExe proof mcp } "MCP proof failed."
+        Invoke-Checked { & $ControlExe proof mcp } "Eyes MCP proof failed."
+    }
+    "proof-hands" {
+        Invoke-Checked { & $ControlExe proof hands } "Hands MCP proof failed."
     }
     "proof-semantic" {
         Invoke-Checked { & $ControlExe proof semantic } "Semantic proof failed."
