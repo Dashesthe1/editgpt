@@ -51,6 +51,21 @@ Eyes remains on port `8765` and does not gain write permissions.
 
 Screenshots stay in Eyes so the write-capable server never needs to own the visual pipeline.
 
+## AE Command Surface integration — M2
+
+Hands is the physical transport for the shared After Effects Command Surface. A registered AE command recipe compiles to known Hands primitives—currently guarded keypress, text, and bounded waits—instead of requiring each milestone to rediscover screen coordinates or duplicate shortcut logic.
+
+This does **not** add an unrestricted `execute anything in AE` backdoor to the Hands MCP. The command registry is owned above the raw input backend, and every physical step still passes through the existing AfterFX foreground allowlist and armed-state checks.
+
+The M2 rule is:
+
+1. if AE already exposes a documented native command, execute that recipe through Hands;
+2. use semantic pointer interaction only when no reliable native command reaches the required state;
+3. do not add a new Hands primitive merely to reproduce functionality already available through a stable AE shortcut/command;
+4. keep command semantics outside the Win32 backend so future JSX/command-ID transports can reuse the same registry without redesigning Hands.
+
+Hands supports the modifier, alphanumeric, function, navigation, and punctuation keys needed by the current expanded command registry. See `docs/AE_COMMAND_SURFACE_V1.md`.
+
 ## One-command lifecycle
 
 The normal launcher starts Eyes MCP, Hands MCP, and the semantic service:
@@ -87,6 +102,8 @@ Eyes MCP        Hands MCP
     \             /
       After Effects
 ```
+
+The AE Command Surface sits above Hands in this architecture: it chooses a known AE-native operation and Hands supplies its guarded physical transport.
 
 ## Definition of proven
 
