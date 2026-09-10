@@ -63,3 +63,11 @@ def test_artifact_summary_lists_evidence_without_reading_contents(tmp_path: Path
     assert summary["directories"] == [
         {"name": "semantic-proof", "files": ["semantic_result.json"]}
     ]
+
+
+def test_cli_accepts_hands_ui_proof() -> None:
+    from editgpt.orchestrator import build_parser
+
+    args = build_parser().parse_args(["proof", "hands-ui"])
+    assert args.command == "proof"
+    assert args.name == "hands-ui"

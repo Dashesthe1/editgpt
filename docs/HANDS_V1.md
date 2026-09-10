@@ -98,7 +98,7 @@ Hands v1 is not complete merely because the server starts. The real workstation 
 4. Non-allowlisted foreground actions are rejected.
 5. After Effects can be focused through the guarded focus operation.
 6. A no-op cursor move succeeds through the MCP action path.
-7. A later deliberate AE interaction proof confirms click, keyboard shortcut, text entry, scroll, and drag behavior against disposable test UI/state.
+7. A deliberate AE interaction proof confirms click, keyboard shortcut, text entry, scroll, and drag behavior against reversible UI state.
 8. Hands is re-disarmed after proofs.
 
-The first live proof intentionally stops at item 6 so it cannot mutate an editing project while validating the transport and native input path.
+All eight gates are now proven on the Windows/After Effects workstation. `proof-semantic-click` verifies a visually grounded File-menu click plus Esc close. `proof-hands-ui` verifies Unicode typing into Effects & Presets, clearing the query, wheel scrolling with visual change and restoration, and dragging/restoring the timeline current-time indicator. These operations change only reversible UI state and do not alter project content.
