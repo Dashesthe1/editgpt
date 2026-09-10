@@ -8,3 +8,4 @@ venv/
 models/
 checkpoints/
 artifacts/
+.editgpt/
