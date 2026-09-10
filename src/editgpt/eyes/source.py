@@ -45,6 +45,8 @@ class VideoSourceReader(Protocol):
 
     def read_frames(self, indices: list[int]) -> list[FramePacket]: ...
 
+    def read_frames_at_timestamps(self, indices: list[int], timestamps_s: list[float]) -> list[FramePacket]: ...
+
     def index_at_seconds(self, seconds: float) -> int: ...
 
     def close(self) -> None: ...
@@ -172,6 +174,50 @@ class PyAVSourceReader:
             raise IndexError(f"source frame index out of range: {missing[0]}")
         return [found[index] for index in requested]
 
+    def read_frames_at_timestamps(self, indices: list[int], timestamps_s: list[float]) -> list[FramePacket]:
+        requested = _validate_indices(indices)
+        if len(requested) != len(timestamps_s):
+            raise ValueError("timestamps_s must match source frame indices")
+        hints = {index: float(ts) for index, ts in zip(requested, timestamps_s, strict=True)}
+        if any(not np.isfinite(ts) or ts < 0.0 for ts in hints.values()):
+            raise ValueError("source frame timestamps must be finite and non-negative")
+        tolerance = 0.4 / self.metadata.fps if self.metadata.fps else 1e-4
+        ordered = sorted(set(requested), key=lambda index: hints[index])
+        clusters: list[list[int]] = []
+        for index in ordered:
+            if not clusters or hints[index] - hints[clusters[-1][-1]] > 1.0:
+                clusters.append([index])
+            else:
+                clusters[-1].append(index)
+        found: dict[int, FramePacket] = {}
+        with self._av.open(str(self.path)) as container:
+            stream = container.streams.video[0]
+            if stream.time_base is None:
+                return self.read_frames(requested)
+            for cluster in clusters:
+                first_time, last_time = hints[cluster[0]], hints[cluster[-1]]
+                seek_time = max(0.0, first_time - 1.0)
+                container.seek(int(seek_time / float(stream.time_base)), stream=stream, backward=True, any_frame=False)
+                pending = set(cluster)
+                for frame in container.decode(stream):
+                    if frame.time is not None:
+                        frame_time = float(frame.time)
+                    elif frame.pts is not None and frame.time_base is not None:
+                        frame_time = float(frame.pts * frame.time_base)
+                    else:
+                        continue
+                    nearest = min(pending, key=lambda index: abs(hints[index] - frame_time)) if pending else None
+                    if nearest is not None and abs(hints[nearest] - frame_time) <= tolerance:
+                        found[nearest] = _packet(path=self.path, backend="pyav", index=nearest, image_bgr=frame.to_ndarray(format="bgr24"), timestamp_s=frame_time, metadata={"pts": frame.pts, "time_base": str(frame.time_base) if frame.time_base else None, "is_corrupt": bool(frame.is_corrupt), "timestamp_guided_seek": True})
+                        pending.remove(nearest)
+                    if not pending or frame_time > last_time + tolerance:
+                        break
+        missing = [index for index in requested if index not in found]
+        if missing:
+            fallback = self.read_frames(sorted(set(missing)))
+            found.update({frame.frame_id: frame for frame in fallback})
+        return [found[index] for index in requested]
+
     def index_at_seconds(self, seconds: float) -> int:
         if seconds < 0:
             raise ValueError("seconds must be non-negative")
@@ -267,6 +313,11 @@ class PyNvVideoCodecSourceReader:
                 )
             )
         return packets
+
+    def read_frames_at_timestamps(self, indices: list[int], timestamps_s: list[float]) -> list[FramePacket]:
+        if len(indices) != len(timestamps_s):
+            raise ValueError("timestamps_s must match source frame indices")
+        return self.read_frames(indices)
 
     def index_at_seconds(self, seconds: float) -> int:
         if seconds < 0:

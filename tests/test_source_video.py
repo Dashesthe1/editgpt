@@ -68,3 +68,21 @@ def test_source_catalog_reuses_open_source_and_closes(tmp_path: Path) -> None:
     assert catalog.close(first_id) is True
     assert catalog.close(first_id) is False
 
+
+
+def test_pyav_timestamp_guided_seek_preserves_exact_indices(tmp_path: Path) -> None:
+    path = tmp_path / "guided.mp4"
+    _write_fixture(path, count=24, fps=12)
+    reader = PyAVSourceReader(path)
+    baseline = reader.read_frames([2, 11, 22])
+    timestamps = [float(frame.metadata["source_time_s"]) for frame in baseline]
+
+    guided = reader.read_frames_at_timestamps([2, 11, 22], timestamps)
+    assert [frame.frame_id for frame in guided] == [2, 11, 22]
+    assert [frame.metadata["source_time_s"] for frame in guided] == pytest.approx(timestamps)
+    assert all(frame.metadata.get("timestamp_guided_seek") is True for frame in guided)
+    for expected, actual in zip(baseline, guided, strict=True):
+        assert np.mean(np.abs(expected.image.astype(float) - actual.image.astype(float))) < 1.0
+
+    with pytest.raises(ValueError):
+        reader.read_frames_at_timestamps([2, 11], [timestamps[0]])
