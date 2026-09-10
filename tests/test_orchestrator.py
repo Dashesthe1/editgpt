@@ -71,3 +71,11 @@ def test_cli_accepts_hands_ui_proof() -> None:
     args = build_parser().parse_args(["proof", "hands-ui"])
     assert args.command == "proof"
     assert args.name == "hands-ui"
+
+
+def test_cli_accepts_controller_proof() -> None:
+    from editgpt.orchestrator import build_parser
+
+    args = build_parser().parse_args(["proof", "controller"])
+    assert args.command == "proof"
+    assert args.name == "controller"

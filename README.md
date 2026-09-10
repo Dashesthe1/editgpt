@@ -2,7 +2,7 @@
 
 EditGPT is a new project for building GPT into a professional After Effects editor by giving it human-like senses and control while retaining machine-precision tools.
 
-## Current milestone: Eyes + Hands observe-act-verify bridge
+## Current milestone: Eyes + Hands + closed-loop Controller v1
 
 Eyes remains the first and highest-priority perception subsystem. The goal is not "periodic screenshots"; it is a complete visual service that lets GPT request reliable evidence about live After Effects playback and exact source footage.
 
@@ -77,6 +77,12 @@ Current Hands contract:
 
 Hands v1 is now proven across its full input surface in reversible After Effects UI state. The paired controller bridge normalizes DPI to physical pixels, exposes Eyes encoded/capture geometry, safely maps model-visible coordinates to screen coordinates, fails closed when multi-monitor geometry is ambiguous, and uses local Qwen3-VL to ground visible UI targets. Live proofs now cover semantic move/click, keyboard Esc and Ctrl+A/Backspace, Unicode text entry, mouse-wheel scrolling with visual restoration, and drag/restore of the timeline current-time indicator.
 
+## Controller v1
+
+The first generalized closed-loop controller is now implemented locally. It accepts a UI goal, re-observes After Effects, asks local Qwen3-VL for one constrained next action, grounds pointer targets separately, executes through Hands, and visually verifies the expected result before continuing. Pointer actions use a fresh grounding frame plus a target-patch freshness check so inference cannot silently act on materially changed UI evidence.
+
+The live controller proof completes an ordered File -> Edit menu task from visual state and action history rather than a fixed macro. It also demonstrated recovery: when one Edit click did not produce the expected dropdown, the verifier rejected the result and the next loop re-observed and retried before declaring completion. See `docs/CONTROLLER_V1.md`.
+
 ## Semantic Eyes stage
 
 The next perception capability under test is local semantic sight.
@@ -125,6 +131,7 @@ Run the current proofs with:
 .\editgpt.ps1 -Action proof-semantic-pointer
 .\editgpt.ps1 -Action proof-semantic-click
 .\editgpt.ps1 -Action proof-hands-ui
+.\editgpt.ps1 -Action proof-controller
 .\editgpt.ps1 -Action proof-semantic
 ```
 
