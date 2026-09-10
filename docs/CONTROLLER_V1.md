@@ -49,11 +49,11 @@ Before a pointer action:
 - A deterministic Task Policy independently authorizes the action impact before Hands execution; model planning cannot self-authorize project mutation.
 - Every planned action must state a visible expected result for post-action verification.
 
-The proof/default `safe_mode` adds another layer: destructive target descriptions are rejected, text entry and double-click are disabled, scroll magnitude is bounded, and the only keyboard action allowed is Escape.
+The proof/default `safe_mode` adds another layer: destructive target descriptions are rejected, text entry and double-click are disabled, scroll magnitude is bounded, and only reversible navigation keyboard actions are allowed.
 
 ## Current action vocabulary
 
-The first generalized planner can choose:
+The generalized planner can choose:
 
 - click
 - double-click
@@ -64,7 +64,7 @@ The first generalized planner can choose:
 - wait
 - drag
 
-Drag is now grounded as two independent semantic targets (source and destination) from the same Eyes frame, converted through the physical-pixel coordinate bridge, and executed as a smooth Hands path. In safe mode, drag is limited to reversible UI-state targets such as the playhead/current-time indicator, scrollbars, and panel dividers.
+Drag is grounded as two independent semantic targets (source and destination) from the same Eyes frame, converted through the physical-pixel coordinate bridge, and executed as a smooth Hands path. In safe mode, drag is limited to reversible UI-state targets such as the playhead/current-time indicator, scrollbars, and panel dividers.
 
 ## Live proof
 
@@ -92,10 +92,20 @@ Run it with:
 
 ## Reversible drag proof
 
-The controller has now independently planned a drag from the timeline start to the 02s ruler mark, grounded the live playhead and destination separately, executed the path through Hands, and verified the playhead at 02s from a fresh Eyes frame. A dedicated `proof-drag` also restores the playhead after validation.
+The controller has independently planned a drag from the timeline start to the 02s ruler mark, grounded the live playhead and destination separately, executed the path through Hands, and verified the playhead at 02s from a fresh Eyes frame. A dedicated `proof-drag` also restores the playhead after validation.
 
 See `docs/TASK_POLICY_V1.md` for the action-impact authorization contract.
 
-## Next milestone
+## M4: structured transactional editing
 
-Controller v1 is still a GUI-control foundation, not yet a professional autonomous editor. The next work is structured editing-task state and action policies that distinguish reversible UI navigation from intentional project mutations. Hands now includes common OEM punctuation keys used by After Effects shortcuts, so later task policies can expose only the specific shortcut families each editing operation needs.
+M4 extends the same Controller rather than creating another control plane. A caller can attach an `EditingTaskContract` that binds mutation authority to one exact goal, explicit mutation kinds, optional target terms, and a finite mutation budget.
+
+Without that contract, `LiveController` remains UI-only even if `safe_mode=False` is passed. With the contract, the planner may propose non-destructive editing actions, but deterministic Task Policy and task-scope checks must both pass before Hands sees the action.
+
+For each authorized project mutation, the controller captures pre-mutation visual evidence. The mutation is committed only if fresh post-action Eyes evidence satisfies its visible expected state. Failed verification, failed post-action capture, or foreground loss after a mutation triggers the predefined `Ctrl+Z` rollback path and deterministic visual comparison with the pre-mutation frame. The controller stops after rollback instead of continuing from uncertain project state.
+
+See `docs/EDITING_TASK_V1.md` for the full M4 contract.
+
+## Next M4 proof
+
+The code/contract gate is followed by a real After Effects proof: execute one bounded project mutation under an explicit contract, verify a successful commit, deliberately exercise the failed-verification rollback path, verify visual restoration, and reuse the existing After Effects process throughout.
