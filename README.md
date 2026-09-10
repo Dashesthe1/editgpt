@@ -67,78 +67,63 @@ Detected workstation hardware:
 - NVIDIA RTX A4500
 - approximately 20 GB VRAM
 
-For the live semantic eye, the current target is **Qwen3-VL-8B-Instruct Q8_0** through `llama.cpp`. This is intentionally higher fidelity than Q4 while still leaving practical GPU headroom for After Effects, the vision projector, context/KV cache, and later Eyes services. The 30B Q4 model remains a candidate for a slower deep-inspection mode, but it is too close to the workstation's total VRAM to make it the default live model while AE is active.
+For the live semantic eye, the current target is **Qwen3-VL-8B-Instruct Q8_0** through `llama.cpp`. This is intentionally higher fidelity than Q4 while still leaving practical GPU headroom for After Effects, the vision projector, context/KV cache, and later Eyes services. The 30B Q4 model remains a candidate for a slower deep-inspection mode rather than the default live model.
 
-Set up the local semantic runtime:
+## One-command automation
 
-```powershell
-cd $HOME\editgpt
-git pull
-powershell -ExecutionPolicy Bypass -File .\scripts\setup_semantic_windows.ps1
-```
-
-Then start Qwen in PowerShell window 1:
-
-```powershell
-llama serve -hf Qwen/Qwen3-VL-8B-Instruct-GGUF:Q8_0 --host 127.0.0.1 --port 8080 -ngl 99 -c 8192
-```
-
-The first launch downloads the official Qwen GGUF model and vision projector. Leave that server running.
-
-In PowerShell window 2, prove semantic interpretation against the truthful AE frame captured by the prior diagnostic:
+The normal Windows entry point is now:
 
 ```powershell
 cd $HOME\editgpt
-.\.venv\Scripts\python.exe .\scripts\prove_semantic.py
+.\editgpt.ps1
 ```
 
-Evidence is written to:
+That single launcher now:
 
-```text
-artifacts/semantic-proof/
-  source.jpg
-  semantic_result.json
-```
+1. checks GitHub and fast-forwards the repo when the working tree is clean;
+2. never overwrites local changes automatically;
+3. bootstraps dependencies and runs tests when the checked-out revision changes;
+4. installs/locates llama.cpp when semantic sight needs it;
+5. starts the local Eyes MCP if it is not already listening;
+6. starts the Qwen semantic server if it is not already ready;
+7. keeps both services in the background with persistent logs;
+8. preserves/reuses the current After Effects process rather than restarting it.
 
-This stage is not considered passed merely because the model returns text. We inspect whether it accurately identifies the application, visible footage, subjects/objects, composition, readable UI state, editing-relevant details, and uncertainty without inventing temporal information that a single frame cannot support.
-
-## Development / refresh
+The first Qwen launch may continue in the background while the official model and vision projector download/load. Check status with:
 
 ```powershell
-cd $HOME\editgpt
-git pull
-powershell -ExecutionPolicy Bypass -File .\scripts\setup_windows.ps1
+.\editgpt.ps1 -Action status
 ```
 
-The bootstrap creates/updates the virtual environment, installs capture + MCP + test dependencies, runs the tests, and reports NVIDIA GPU model/VRAM.
-
-## Live capture proof
-
-Open After Effects with moving footage ready in the Composition viewer. From PowerShell run:
+Run the current semantic proof with:
 
 ```powershell
-.\.venv\Scripts\editgpt-eyes.exe capture --seconds 5 --fps 60
+.\editgpt.ps1 -Action proof-semantic
 ```
 
-The command waits five seconds before capture begins. During that delay, switch to After Effects and start the Composition preview. Keep After Effects visible for the five-second capture window.
-
-Evidence is written to `artifacts/eyes-live-proof/` as a JSON summary plus one JPEG sample per second.
-
-## Local MCP proof
-
-In PowerShell window 1, start the local server:
+Other useful commands:
 
 ```powershell
-.\.venv\Scripts\editgpt-eyes-mcp.exe --transport streamable-http --host 127.0.0.1 --port 8765
+.\editgpt.ps1 -Action doctor
+.\editgpt.ps1 -Action proof-capture
+.\editgpt.ps1 -Action proof-mcp
+.\editgpt.ps1 -Action logs -Service eyes_mcp
+.\editgpt.ps1 -Action logs -Service semantic_qwen
+.\editgpt.ps1 -Action down
 ```
 
-Leave it running. In PowerShell window 2, run:
+See `docs/ORCHESTRATOR.md` for lifecycle and safety behavior.
 
-```powershell
-.\.venv\Scripts\python.exe .\scripts\prove_mcp.py
-```
+## Local state
 
-The local MCP endpoint is `http://127.0.0.1:8765/mcp`.
+The orchestrator keeps its machine-specific state under `.editgpt/`, which is ignored by Git. Proof evidence remains under `artifacts/`.
+
+Current local endpoints:
+
+- Eyes MCP: `http://127.0.0.1:8765/mcp`
+- Qwen semantic server: `http://127.0.0.1:8080/v1`
+
+These are local development endpoints only. A protected ChatGPT-facing route is a separate future architecture checkpoint.
 
 ## Design rule
 
