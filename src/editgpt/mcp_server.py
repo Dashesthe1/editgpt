@@ -45,13 +45,31 @@ def _encode_jpeg(image: np.ndarray, *, max_width: int = 1280, quality: int = 88)
     return encoded.tobytes()
 
 
-def _frame_metadata(frame: Any) -> dict[str, Any]:
+def _encoded_dimensions(image: np.ndarray, max_width: int) -> tuple[int, int]:
+    height, width = image.shape[:2]
+    if width <= max_width:
+        return width, height
+    scale = max_width / float(width)
+    return max_width, max(1, int(round(height * scale)))
+
+
+def _frame_metadata(frame: Any, *, max_width: int) -> dict[str, Any]:
+    height, width = frame.image.shape[:2]
+    encoded_width, encoded_height = _encoded_dimensions(frame.image, max_width)
     return {
         "frame_id": frame.frame_id,
         "timestamp_ns": frame.timestamp_ns,
         "source": frame.source,
         "shape": list(frame.image.shape),
         "metadata": dict(frame.metadata),
+        "geometry": {
+            "capture_pixels": {"width": width, "height": height},
+            "encoded_pixels": {"width": encoded_width, "height": encoded_height},
+            "encoded_to_capture_scale": {
+                "x": width / float(encoded_width),
+                "y": height / float(encoded_height),
+            },
+        },
     }
 
 
@@ -104,7 +122,7 @@ def build_server():
     def eyes_latest_frame(max_width: int = 1280, jpeg_quality: int = 88) -> list[Any]:
         """Return the newest retained screen frame as model-visible JPEG evidence."""
         frame = _RUNTIME.latest_frame()
-        metadata = json.dumps(_frame_metadata(frame), separators=(",", ":"))
+        metadata = json.dumps(_frame_metadata(frame, max_width=max_width), separators=(",", ":"))
         return [
             metadata,
             Image(data=_encode_jpeg(frame.image, max_width=max_width, quality=jpeg_quality), format="jpeg"),
@@ -125,7 +143,7 @@ def build_server():
             raise RuntimeError("no live frames are available")
         content: list[Any] = []
         for frame in frames:
-            content.append(json.dumps(_frame_metadata(frame), separators=(",", ":")))
+            content.append(json.dumps(_frame_metadata(frame, max_width=max_width), separators=(",", ":")))
             content.append(
                 Image(
                     data=_encode_jpeg(frame.image, max_width=max_width, quality=jpeg_quality),
@@ -145,7 +163,7 @@ def build_server():
         if frame is None:
             raise KeyError("requested frame is not present in the rolling buffer")
         return [
-            json.dumps(_frame_metadata(frame), separators=(",", ":")),
+            json.dumps(_frame_metadata(frame, max_width=max_width), separators=(",", ":")),
             Image(data=_encode_jpeg(frame.image, max_width=max_width, quality=jpeg_quality), format="jpeg"),
         ]
 

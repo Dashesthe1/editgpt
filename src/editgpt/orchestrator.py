@@ -223,6 +223,7 @@ class EditGPTOrchestrator:
             "capture": self.root / "scripts" / "probe_capture_modes.py",
             "mcp": self.root / "scripts" / "prove_mcp.py",
             "hands": self.root / "scripts" / "prove_hands.py",
+            "loop": self.root / "scripts" / "prove_observe_act_verify.py",
             "semantic": self.root / "scripts" / "prove_semantic.py",
         }
         if name not in scripts:
@@ -238,6 +239,11 @@ class EditGPTOrchestrator:
             if not start.get("ok"):
                 print(json.dumps(start, indent=2))
                 return 5
+        elif name == "loop":
+            for start in (self.start_eyes_mcp(), self.start_hands_mcp()):
+                if not start.get("ok"):
+                    print(json.dumps(start, indent=2))
+                    return 6
         elif name == "semantic":
             start = self.start_semantic_qwen()
             if not start.get("ok"):
@@ -481,7 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="run tests/environment checks and print status")
 
     proof = sub.add_parser("proof", help="run one current proof")
-    proof.add_argument("name", choices=("capture", "mcp", "hands", "semantic"))
+    proof.add_argument("name", choices=("capture", "mcp", "hands", "loop", "semantic"))
 
     logs = sub.add_parser("logs", help="show the tail of a managed service log")
     logs.add_argument("service", choices=("eyes_mcp", "hands_mcp", "semantic_qwen"))

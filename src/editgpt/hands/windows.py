@@ -41,6 +41,7 @@ SM_XVIRTUALSCREEN = 76
 SM_YVIRTUALSCREEN = 77
 SM_CXVIRTUALSCREEN = 78
 SM_CYVIRTUALSCREEN = 79
+DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = ctypes.c_void_p(-4)
 
 ULONG_PTR = wintypes.WPARAM
 
@@ -129,6 +130,7 @@ class WindowsInputBackend:
         if os.name != "nt":
             raise RuntimeError("EditGPT Hands currently requires Windows")
         self._configure_signatures()
+        self._enable_per_monitor_dpi_awareness()
 
     def _configure_signatures(self) -> None:
         assert user32 is not None and kernel32 is not None
@@ -148,12 +150,20 @@ class WindowsInputBackend:
         user32.SetForegroundWindow.restype = wintypes.BOOL
         user32.GetSystemMetrics.argtypes = (ctypes.c_int,)
         user32.GetSystemMetrics.restype = ctypes.c_int
+        user32.SetProcessDpiAwarenessContext.argtypes = (ctypes.c_void_p,)
+        user32.SetProcessDpiAwarenessContext.restype = wintypes.BOOL
         user32.GetWindowTextLengthW.argtypes = (wintypes.HWND,)
         user32.GetWindowTextLengthW.restype = ctypes.c_int
         user32.GetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
         user32.GetWindowTextW.restype = ctypes.c_int
         user32.GetWindowThreadProcessId.argtypes = (wintypes.HWND, ctypes.POINTER(wintypes.DWORD))
         user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+        user32.AttachThreadInput.argtypes = (wintypes.DWORD, wintypes.DWORD, wintypes.BOOL)
+        user32.AttachThreadInput.restype = wintypes.BOOL
+        user32.BringWindowToTop.argtypes = (wintypes.HWND,)
+        user32.BringWindowToTop.restype = wintypes.BOOL
+        kernel32.GetCurrentThreadId.argtypes = ()
+        kernel32.GetCurrentThreadId.restype = wintypes.DWORD
         kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
         kernel32.OpenProcess.restype = wintypes.HANDLE
         kernel32.QueryFullProcessImageNameW.argtypes = (
@@ -165,6 +175,15 @@ class WindowsInputBackend:
         kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
         kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
         kernel32.CloseHandle.restype = wintypes.BOOL
+
+    def _enable_per_monitor_dpi_awareness(self) -> None:
+        assert user32 is not None
+        ctypes.set_last_error(0)
+        ok = user32.SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+        if not ok:
+            error = ctypes.get_last_error()
+            if error not in (0, 5):
+                raise ctypes.WinError(error)
 
     def status(self) -> dict[str, Any]:
         left, top, width, height = self._virtual_screen()
@@ -211,12 +230,30 @@ class WindowsInputBackend:
         hwnd = int(target["hwnd"])
         user32.ShowWindow(hwnd, SW_RESTORE)
         if not user32.SetForegroundWindow(hwnd):
-            raise RuntimeError(
-                f"Windows refused to foreground {process_name!r}; foreground-lock rules may require the user "
-                "to activate After Effects once before automation takes over"
-            )
+            self._force_foreground(hwnd)
         time.sleep(0.05)
+        if int(user32.GetForegroundWindow()) != hwnd:
+            raise RuntimeError(f"Windows refused to foreground {process_name!r} after guarded thread-input fallback")
         return self._window_info(hwnd)
+
+    def _force_foreground(self, hwnd: int) -> None:
+        assert user32 is not None and kernel32 is not None
+        foreground = int(user32.GetForegroundWindow())
+        current_thread = int(kernel32.GetCurrentThreadId())
+        target_pid = wintypes.DWORD(0)
+        target_thread = int(user32.GetWindowThreadProcessId(hwnd, ctypes.byref(target_pid)))
+        foreground_pid = wintypes.DWORD(0)
+        foreground_thread = int(user32.GetWindowThreadProcessId(foreground, ctypes.byref(foreground_pid))) if foreground else 0
+        attached: list[int] = []
+        try:
+            for thread_id in {target_thread, foreground_thread}:
+                if thread_id and thread_id != current_thread and user32.AttachThreadInput(current_thread, thread_id, True):
+                    attached.append(thread_id)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+        finally:
+            for thread_id in reversed(attached):
+                user32.AttachThreadInput(current_thread, thread_id, False)
 
     def move(self, x: int, y: int) -> None:
         assert user32 is not None
