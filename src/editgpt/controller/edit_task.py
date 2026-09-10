@@ -22,6 +22,7 @@ MUTATION_KIND_TERMS: dict[str, tuple[str, ...]] = {
     "layer_structure": ("duplicate layer", "new layer", "adjustment layer", "null object"),
 }
 ALLOWED_MUTATION_KINDS = frozenset((*MUTATION_KIND_TERMS.keys(), "generic"))
+REDO_KEY_CHORDS = frozenset({("CTRL", "SHIFT", "Z"), ("CTRL", "Y")})
 
 
 @dataclass(frozen=True)
@@ -88,10 +89,15 @@ class EditingTaskContract:
         return (
             f"task_id={self.task_id}; allowed mutation kinds={', '.join(self.allowed_mutations)}; "
             f"allowed target terms={targets}; maximum committed mutations={self.max_mutations}; "
-            "destructive actions are not authorized"
+            "undo/redo is controller-owned; destructive actions are not authorized"
         )
 
     def authorize(self, plan: PlannedAction, *, committed_mutations: int) -> ScopeDecision:
+        if plan.action_type == "keypress":
+            keys = tuple(key.upper() for key in plan.keys)
+            if keys == self.rollback_keys or keys in REDO_KEY_CHORDS:
+                return ScopeDecision(False, (), "undo/redo is reserved for the controller transaction path")
+
         impact = classify_action_impact(plan)
         if impact == "destructive":
             return ScopeDecision(False, (), "destructive action is outside the M4 editing task contract")
