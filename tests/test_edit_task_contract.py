@@ -10,6 +10,7 @@ from editgpt.controller.edit_task import (
 )
 from editgpt.controller.live_loop import LiveController
 from editgpt.controller.planner import PlannedAction
+from editgpt.controller.policy import classify_action_impact
 
 
 def _plan(action: str, target: str | None, expected: str, **kwargs) -> PlannedAction:
@@ -89,6 +90,41 @@ def test_mixed_mutation_requires_every_detected_kind() -> None:
         target_terms=("hero layer",),
     )
     assert transform_only.authorize(plan, committed_mutations=0).allowed is False
+
+
+def test_project_control_navigation_does_not_consume_mutation_scope() -> None:
+    select_layer = _plan(
+        "click",
+        "hero layer row in the timeline",
+        "hero layer is selected",
+    )
+    focus_scale = _plan(
+        "double_click",
+        "Scale value field for hero layer",
+        "Scale value field is focused",
+    )
+    actual_write = _plan(
+        "type",
+        None,
+        "hero layer scale reads 105 percent",
+        text="105",
+    )
+    assert classify_action_impact(select_layer) == "reversible_ui"
+    assert classify_action_impact(focus_scale) == "reversible_ui"
+    assert classify_action_impact(actual_write) == "project_mutation"
+
+
+def test_undo_and_redo_are_reserved_for_controller_transaction_path() -> None:
+    contract = EditingTaskContract(
+        task_id="m4-generic",
+        goal="Make one bounded generic edit to hero layer.",
+        allowed_mutations=("generic",),
+        target_terms=("hero layer",),
+    )
+    undo = _plan("keypress", None, "hero layer returns to its earlier state", keys=("CTRL", "Z"))
+    redo = _plan("keypress", None, "hero layer returns to its later state", keys=("CTRL", "SHIFT", "Z"))
+    assert contract.authorize(undo, committed_mutations=0).allowed is False
+    assert contract.authorize(redo, committed_mutations=0).allowed is False
 
 
 def test_rollback_verification_uses_deterministic_visual_delta() -> None:
