@@ -67,6 +67,21 @@ The service should converge on operations such as:
 
 Backends remain replaceable. A new model should not require redesigning GPT-facing contracts.
 
+## AE Command Surface integration — M1
+
+M1 remains strictly read-only, but it participates in the shared AE command-first architecture as the **evidence layer**.
+
+When an Eyes proof or later controller needs AE placed into an inspectable state, the surrounding harness should prefer the shared registered command surface over manually finding UI controls. Examples include opening Project or Effects & Presets, revealing Scale or Mask Path, toggling the Graph Editor, moving exactly one frame, fitting the viewer, or switching between Composition and Timeline focus.
+
+The separation is important:
+
+- Eyes never sends the command itself and never gains write authority.
+- Hands or the controller executes the registered command.
+- Eyes captures fresh evidence after the command and verifies the intended visible state.
+- If a perception test repeatedly needs an AE state, add/reuse a command recipe instead of building a new perception-specific UI driver.
+
+This makes M1 tests faster and more deterministic without weakening the Eyes security boundary. See `docs/AE_COMMAND_SURFACE_V1.md`.
+
 ## Validation gates
 
 Eyes cannot be called complete until real-video tests pass for:
