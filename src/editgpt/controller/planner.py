@@ -6,6 +6,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
+from editgpt.controller.ae_commands import AE_COMMANDS, get_ae_command
 from editgpt.eyes.semantic import LocalQwenVLClient, SemanticObservation
 
 _ALLOWED_ACTIONS = {
@@ -17,6 +18,7 @@ _ALLOWED_ACTIONS = {
     "type",
     "wait",
     "drag",
+    "ae_command",
 }
 _SAFE_TARGET_BLOCKLIST = (
     "save",
@@ -42,6 +44,7 @@ class PlannedAction:
     scroll_y: int = 0
     wait_s: float = 0.25
     destination: str | None = None
+    command: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -116,6 +119,22 @@ class PlannedAction:
         if safe_mode and action == "type":
             raise PermissionError("safe controller mode does not permit text entry")
 
+        command_value = payload.get("command")
+        command = str(command_value).strip().lower() if command_value is not None else None
+        if action == "ae_command":
+            if not command:
+                raise ValueError("planned ae_command requires a registered command key")
+            try:
+                recipe = get_ae_command(command)
+            except KeyError as exc:
+                raise ValueError(str(exc)) from exc
+            if recipe.requires_target and not target:
+                raise ValueError(f"After Effects command {command!r} requires a semantic target description")
+            if safe_mode and recipe.impact != "reversible_ui":
+                raise PermissionError("safe controller mode only permits reversible registered AE commands")
+        elif command is not None:
+            raise ValueError("command is only valid for action=ae_command")
+
         scroll_x = int(payload.get("scroll_x", 0) or 0)
         scroll_y = int(payload.get("scroll_y", 0) or 0)
         if abs(scroll_x) > 600 or abs(scroll_y) > 600:
@@ -137,6 +156,7 @@ class PlannedAction:
             scroll_y=scroll_y,
             wait_s=wait_s,
             destination=destination,
+            command=command,
         )
 
 
@@ -161,6 +181,7 @@ def _compact_history(history: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             "step": step.get("step"),
             "status": plan.get("status"),
             "action": plan.get("action_type"),
+            "command": plan.get("command"),
             "target": plan.get("target"),
             "expected": plan.get("expected"),
             "verified": step.get("verified"),
@@ -184,11 +205,12 @@ def choose_next_action(
     if not goal.strip():
         raise ValueError("controller goal must not be empty")
     history_text = json.dumps(_compact_history(history), ensure_ascii=False)
+    command_text = ", ".join(sorted(AE_COMMANDS))
     safe_rule = (
         "Safe proof mode is ON. Do not save, close a project, exit, delete, remove, type text, "
-        "double-click, or use any keyboard shortcut except Escape."
+        "double-click, or use raw keyboard shortcuts except the permitted navigation keys. Registered ae_command actions are allowed only when their impact is reversible UI."
         if safe_mode
-        else "Project-changing actions are allowed only when they are required by the stated goal."
+        else "Project-changing actions are allowed only when they are required by the stated goal and pass the external task contract."
     )
     prompt = f"""You are the next-action planner for EditGPT controlling Adobe After Effects.
 Use ONLY the visible screenshot plus the supplied action history.
@@ -196,12 +218,16 @@ Goal: {goal}
 Recent history JSON: {history_text}
 {safe_rule}
 
+Prefer a registered After Effects command over mouse navigation when it directly performs the required operation.
+Registered AE command keys: {command_text}
+
 Choose exactly one next step. Return ONLY JSON with these keys:
 status: "act", "done", or "blocked"
-action: one of "click", "double_click", "move", "scroll", "drag", "keypress", "type", "wait", or null
-target: a precise visible UI target description for pointer/scroll/drag source actions, otherwise null
+action: one of "click", "double_click", "move", "scroll", "drag", "keypress", "type", "wait", "ae_command", or null
+command: registered AE command key for ae_command, otherwise null
+target: precise semantic target/context for ae_command or visible UI target for pointer actions, otherwise null
 destination: a precise visible UI destination description for drag, otherwise null
-keys: array of key names for keypress, otherwise []
+keys: array of key names for raw keypress, otherwise []
 text: string for type, otherwise null
 scroll_x, scroll_y: integer pixel-style wheel deltas, each within -600..600
 wait_s: number within 0..1.5 for wait
@@ -211,18 +237,19 @@ reason: concise reasoning grounded in the visible UI and history
 
 Rules:
 - Never output screen coordinates; targeting is grounded separately.
+- Registered ae_command keys are deterministic control primitives; never invent a command key.
 - Use status=done only when the visible UI AND history show the whole goal is complete.
 - The expected field must contain ONLY a concrete visible UI state, never meta claims such as no further action is needed or the goal is complete.
 - Follow ordered requirements in the goal; do not skip earlier requested steps just because a later state is visible.
 - Use status=blocked if the necessary target/state is not visually clear enough.
-- Prefer one simple reversible UI action at a time.
+- Prefer registered AE commands, then simple reversible UI actions, and use pointer navigation when no reliable command path exists.
 - If a top-level menu dropdown is already open and the goal needs an adjacent top-level menu, prefer LEFT/RIGHT keypress navigation over repeatedly clicking another menu label.
 """
     observation = client.observe(
         image,
         prompt=prompt,
         source="live_controller_planner",
-        max_tokens=260,
+        max_tokens=300,
         max_width=image.shape[1],
         jpeg_quality=92,
     )
@@ -235,7 +262,7 @@ Rules:
         )
         observation = client.observe(
             image, prompt=repair_prompt, source="live_controller_planner_repair",
-            max_tokens=300, max_width=image.shape[1], jpeg_quality=92,
+            max_tokens=340, max_width=image.shape[1], jpeg_quality=92,
         )
         plan = PlannedAction.from_json_text(observation.text, safe_mode=safe_mode)
     if plan.confidence < min_confidence and plan.status == "act":
