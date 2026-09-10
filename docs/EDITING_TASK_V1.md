@@ -137,7 +137,15 @@ The harness intentionally runs the rollback proof **before** the commit proof:
 
 The proof never starts, stops, closes, or restarts After Effects. If rollback cannot be proven, it stops before running the commit case. If a committed proof mutation cannot be cleaned up safely, it reports failure rather than issuing additional blind Undo operations.
 
-Run the live gate from an already prepared EditGPT environment with:
+The preferred live-gate entrypoint is now the normal EditGPT PowerShell surface:
+
+```powershell
+.\editgpt.ps1 -Action proof-m4
+```
+
+`proof-m4` performs revision bootstrap when needed, starts/retains the managed Eyes, Hands, and local semantic services, waits until the local semantic verifier is ready, and then invokes `scripts/prove_m4_transaction.py`. It does not manage the After Effects process. `-NoSemantic` is rejected for this proof because real visual verification is part of the gate.
+
+For low-level diagnostic use, the harness can still be invoked directly from an already prepared environment:
 
 ```powershell
 .\.venv\Scripts\python.exe .\scripts\prove_m4_transaction.py
@@ -165,4 +173,4 @@ The software gate is:
 6. rollback image verification is deterministic;
 7. the Windows test suite passes.
 
-The remaining live workstation gate is to run `scripts/prove_m4_transaction.py` against the existing After Effects process and obtain `ok: true` in `artifacts/m4-live-proof/proof.json`. That single proof must demonstrate a bounded real AE mutation, a verified commit, a deliberately failed visual verification, verified controller-owned `Ctrl+Z` restoration, proof cleanup back to the initial visible state, and reuse of the same After Effects process.
+The remaining live workstation gate is to run `.\editgpt.ps1 -Action proof-m4` against the existing After Effects process and obtain `ok: true` in `artifacts/m4-live-proof/proof.json`. That single proof must demonstrate a bounded real AE mutation, a verified commit, a deliberately failed visual verification, verified controller-owned `Ctrl+Z` restoration, proof cleanup back to the initial visible state, and reuse of the same After Effects process.
