@@ -56,3 +56,22 @@ def test_action_requires_visible_expected_state() -> None:
             '{"status":"act","action":"click","target":"File menu label",'
             '"confidence":0.9,"reason":"visible"}'
         )
+
+
+def test_compact_history_drops_large_semantic_payloads() -> None:
+    from editgpt.controller.planner import _compact_history
+
+    compact = _compact_history([
+        {
+            "step": 1,
+            "plan": {"status": "act", "action_type": "click", "target": "File", "expected": "open"},
+            "planner": {"text": "very large raw model output"},
+            "verified": True,
+            "verification_reason": "visible",
+        }
+    ])
+    assert compact == [{
+        "step": 1, "status": "act", "action": "click", "target": "File", "expected": "open",
+        "verified": True, "verification_reason": "visible", "stale_before_action": False,
+        "final_verification_ok": None, "final_verification_reason": None,
+    }]
