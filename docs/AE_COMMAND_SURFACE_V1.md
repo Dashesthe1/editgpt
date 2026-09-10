@@ -1,93 +1,131 @@
 # EditGPT After Effects Command Surface v1
 
-## Why this exists
+## Status
 
-EditGPT should not visually hunt through After Effects for controls that AE can already reach deterministically. M4 therefore adds a command-first layer above Hands.
+The After Effects Command Surface is a **shared EditGPT capability**, not an M4-only feature.
 
-The preferred control order is:
+It is available to every milestone and must be considered before a milestone creates new UI automation or a new dedicated editing tool for functionality that After Effects already exposes.
 
-1. registered direct After Effects command;
-2. After Effects Quick Apply search;
-3. semantic Eyes + mouse/keyboard navigation;
-4. manual-style geometric interaction only when the operation genuinely requires it.
+Canonical implementation: `src/editgpt/controller/ae_commands.py`.
 
-This is a speed and reliability optimization, not a replacement for Eyes. Every meaningful state transition is still verified visually, and project-mutating commands still pass through the M4 transaction contract.
+## Command-first rule
+
+For any After Effects operation, use the strongest existing AE-native route in this order:
+
+1. registered direct After Effects shortcut/command;
+2. Quick Apply when it can expose the required effect, animation preset, or menu command;
+3. stable After Effects scripting API / `app.executeCommand(id)` transport when available and proven;
+4. semantic Eyes + Hands navigation;
+5. new custom control tooling only when AE does not already expose a reliable route.
+
+This rule applies to M1, M2, M3, M4, and every later M# phase.
+
+The purpose is not to turn EditGPT into a macro engine. Commands handle deterministic access and operations; Eyes still supplies context and evidence, and higher-level milestones still decide *what* should be done.
+
+## Milestone integration
+
+### M1 — Eyes / perception
+
+Eyes remains read-only. Registered UI commands can place AE into deterministic inspectable states—open a panel, reveal a property, change a viewer zoom, move one frame, or expose the Graph Editor—so perception tests do not waste time finding controls manually. Eyes verifies the result.
+
+### M2 — Hands / execution
+
+Hands is the physical transport for shortcut recipes. A registered command compiles to known Hands steps instead of making the controller rediscover mouse coordinates. The foreground allowlist and Windows input boundary remain unchanged.
+
+### M3 — closed-loop Controller
+
+The planner prefers registered commands before pointer navigation. Because the catalog is now large, `command_keys_for_goal()` supplies a compact goal-relevant subset plus core fallback commands rather than dumping the whole registry into every warm-loop prompt.
+
+This keeps command coverage broad without sacrificing the action-to-action latency target.
+
+### M4 — scoped project mutation
+
+Commands that modify project content declare their semantic mutation kinds. They pass through the same `EditingTaskContract` authorization, pre-mutation Eyes evidence, post-action visual verification, and transaction-owned rollback path as pointer/typing mutations.
+
+A shortcut is never allowed to bypass M4 merely because Adobe implements it natively.
+
+### M5 and later
+
+At the start of every future milestone, perform an **AE-native capability audit** for the functions that phase needs. Add or upgrade command recipes before designing new control primitives. New milestones inherit the same registry automatically.
+
+If a later phase adds a JSX/UXP/in-process scripting bridge, that bridge should be another command transport behind the same stable command keys rather than a parallel unrestricted edit API.
 
 ## Registered command contract
 
-`src/editgpt/controller/ae_commands.py` is the canonical registry. A command recipe declares:
+Each `AECommandRecipe` declares:
 
 - stable command key;
 - human-readable purpose;
+- domain (`panel`, `tool`, `composition`, `time`, `preview`, `view`, `footage`, `effect`, `layer`, `property`, `mask`, `keyframe`, `text`, `3d`, etc.);
 - transport (`shortcut` or shortcut sequence today);
 - deterministic Hands steps;
-- safety impact (`reversible_ui` or `project_mutation`);
-- mutation kinds for M4 scope checks;
-- whether a selected/active semantic target is required.
+- safety impact (`reversible_ui`, `project_mutation`, or later explicitly gated categories);
+- mutation kinds used by the editing-task contract;
+- whether a selected/active semantic target is required;
+- source provenance.
 
-The planner can emit `action="ae_command"` only with a key that exists in the registry. Invented commands fail parsing before Hands receives anything.
+The model may emit `action="ae_command"` only with a key that exists in the registry. Invented command keys fail parsing before Hands receives an action.
 
-## Initial command set
+Double-letter AE shortcuts such as `MM`, `UU`, `RR`, and `EE` are represented as explicit sequential Hands keypresses rather than chords.
 
-The first registry includes commands for:
+## Current breadth
 
-- reveal Anchor Point, Position, Scale, Rotation, Opacity, Effects, Mask Path, all Masks, keyframed properties, and modified properties;
-- create a new mask (`Ctrl+Shift+N` on Windows);
-- enter mask Free Transform;
-- open Mask Shape and Mask Feather dialogs;
-- open Position, Rotation, and Opacity dialogs;
-- open Quick Apply (`Ctrl+Enter` on Windows).
+The registry now contains more than 140 AE-native commands spanning:
 
-Double-letter After Effects shortcuts such as `MM` and `UU` are represented as explicit sequential Hands keypresses rather than as a chord.
+- panels, viewers, and focus switching;
+- tool activation;
+- composition/work-area operations;
+- time navigation and preview;
+- viewer and Timeline zoom/display;
+- footage access;
+- effects and animation presets;
+- layer creation, selection, timing, precomposition, and fitting;
+- property reveal/dialog commands;
+- masks;
+- keyframes and Graph Editor operations;
+- text-layer creation;
+- 3D views, cameras, lights, and gizmos.
 
-## Quick Apply fallback
+Examples include `panel.effects_presets.toggle`, `tool.roto_brush`, `composition.settings.open`, `time.frame.forward`, `preview.toggle`, `layer.split`, `layer.reverse_time`, `layer.time_remap.enable`, `layer.fit.comp`, `property.scale.reveal`, `mask.new`, `keyframe.ease`, and `layer3d.new_camera`.
 
-After Effects Quick Apply can search and run effects, animation presets, and top-level menu commands. It therefore gives EditGPT a broad deterministic doorway without needing to know the screen position of Effects & Presets, nested menus, or individual menu items.
+## Goal-relevant command selection
 
-For operations that are not yet in the registry, the controller can:
+A very large registry should not become a very large planner prompt. `command_keys_for_goal(goal)` ranks commands against the task goal and returns a bounded relevant subset while retaining a compact baseline of common commands such as Quick Apply, Selection, panel access, transform-property reveals, frame navigation, and preview.
 
-1. run `quick_apply.open`;
-2. type a search term into the visible Quick Apply field;
-3. visually verify the intended result is selected/visible;
-4. execute Enter as the actual operation;
-5. verify the resulting After Effects state.
+This means command coverage can continue to grow without linearly increasing warm-loop inference input.
 
-Typing into a visible search field is treated as UI navigation, not as a project mutation. If pressing Enter applies an effect or otherwise changes the project, that final action is independently classified and must pass the M4 editing-task scope before execution.
+## Quick Apply
 
-## Mask example
+Adobe documents Quick Apply as a single search surface for effects, animation presets, and top-level menu commands. EditGPT registers `quick_apply.open` (`Ctrl+Enter` on Windows) as the universal entry point.
 
-For a selected footage layer, creating a default new mask no longer requires opening Layer > Mask > New Mask with pointer navigation. The planner can request:
+Opening Quick Apply itself is reversible UI. Search/result confirmation is still handled conservatively by the normal controller policy until a parameterized Quick Apply recipe has deterministic result-type preconditions. We do **not** assume that pressing Enter on an arbitrary Quick Apply result is safe merely because the search dialog is open.
 
-```json
-{
-  "action": "ae_command",
-  "command": "mask.new",
-  "target": "selected hero footage layer",
-  "expected": "a new Mask 1 is visible under the selected hero footage layer"
-}
-```
-
-`mask.new` is registered as a `project_mutation` with mutation kind `mask`, so it still requires an `EditingTaskContract` that authorizes mask mutation on that target. The controller captures pre-mutation Eyes evidence, sends the exact shortcut through Hands, verifies the new mask visually, and rolls back with the transaction-owned Undo path if verification fails.
+Official source: https://helpx.adobe.com/after-effects/desktop/animate-in-after-effects/animation-keyframes/quick-apply.html
 
 ## Direct scripting / command IDs
 
-After Effects also exposes `app.executeCommand(id)` for GUI menu commands and `app.findMenuCommandId(command)` for discovering menu-command IDs. Adobe's scripting documentation notes that command IDs can reach some functions not otherwise exposed through the scripting API, while command-name lookup can vary across language packages.
+After Effects scripting exposes `app.executeCommand(id)` for menu commands and `app.findMenuCommandId(command)` for discovering IDs. This can eventually eliminate even more UI travel.
 
-This is a useful later transport for the same registry. We should add it only when EditGPT has a reliable in-process JSX execution path; the registry abstraction is intentionally transport-neutral so shortcut recipes can later be upgraded to command-ID execution without changing planner semantics or M4 authorization.
+Command IDs are not treated as globally stable magic numbers without version/platform proof. The registry is intentionally transport-neutral so a proven shortcut recipe can later be upgraded to a scripting/command-ID recipe without changing planner semantics, safety classification, or milestone contracts.
+
+Reference: https://ae-scripting.docsforadobe.dev/general/application/
+
+## Source authority
+
+The expanded Windows shortcut registry was checked against Adobe's current keyboard-shortcut reference on 2026-09-10. Adobe lists the reference as last updated 2026-05-05.
+
+Official source: https://helpx.adobe.com/after-effects/desktop/get-started/keyboard-shortcuts/keyboard-shortcuts-reference.html
+
+When Adobe changes a shortcut or introduces a better native path, update the registry recipe rather than teaching each milestone a separate workaround.
 
 ## Architecture decision
 
-No new MCP is required for Command Surface v1. Hands already provides the guarded keyboard transport, Eyes already verifies the resulting UI, and M4 already owns project-mutation authorization and rollback.
+No new repository or MCP is required for this command layer.
 
-If a future direct JSX bridge is added, it should be implemented as another transport behind the same registered command keys rather than as a parallel unrestricted editing control plane.
+- Eyes remains read-only evidence.
+- Hands remains the guarded physical input boundary.
+- Controller owns command selection.
+- Editing-task policy owns mutation authorization and rollback.
+- Future scripting transports stay behind the same registry.
 
-## Expansion rule
-
-Whenever EditGPT repeatedly needs to navigate to the same AE function, check in this order:
-
-1. documented direct keyboard shortcut;
-2. Quick Apply entry;
-3. stable `app.executeCommand` ID / scripting API operation;
-4. only then retain a vision-and-pointer recipe.
-
-New commands should be added to the registry with tests before the planner is allowed to use them. This lets the command library grow throughout EditGPT development instead of being milestone-specific throwaway automation.
+This is deliberately one shared capability plane across the complete EditGPT roadmap.
