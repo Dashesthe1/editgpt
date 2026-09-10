@@ -12,7 +12,8 @@ REVERSIBLE_DRAG_TERMS = (
 )
 DESTRUCTIVE_TERMS = (
     "delete", "remove", "purge", "overwrite", "replace footage",
-    "close project", "quit", "exit",
+    "close project", "quit", "exit", "save", "export", "render",
+    "collect files",
 )
 PROJECT_MUTATION_TERMS = (
     "layer", "keyframe", "effect", "mask", "composition", "comp ",
@@ -23,10 +24,12 @@ REVERSIBLE_CLICK_TERMS = (
     "menu", "dropdown", "tab", "panel", "search field", "search box",
     "timeline ruler", "toolbar", "workspace",
 )
-REVERSIBLE_CLICK_EXPECTATION_TERMS = (
+REVERSIBLE_UI_EXPECTATION_TERMS = (
     "is selected", "is highlighted", "field is focused", "field is active",
     "is expanded", "is collapsed", "dropdown is visible", "menu is open",
     "submenu is visible", "panel is active", "panel is focused",
+    "property is visible", "property is revealed", "properties are visible",
+    "properties are revealed", "tool is active",
 )
 
 
@@ -63,7 +66,7 @@ class TaskPolicy:
     def authorize(self, plan: PlannedAction) -> PolicyDecision:
         impact = classify_action_impact(plan)
         if impact == "destructive" and not self.allow_destructive:
-            return PolicyDecision(False, impact, "destructive actions are not authorized by this task policy")
+            return PolicyDecision(False, impact, "destructive/non-transactional actions are not authorized by this task policy")
         if impact == "project_mutation" and not self.allow_project_mutation:
             return PolicyDecision(False, impact, "project mutation is not authorized by this task policy")
         if impact == "ambiguous" and not self.allow_ambiguous:
@@ -87,6 +90,8 @@ def classify_action_impact(plan: PlannedAction) -> str:
         keys = tuple(key.upper() for key in plan.keys)
         if keys in {("ESC",), ("ESCAPE",), ("HOME",), ("UP",), ("DOWN",), ("LEFT",), ("RIGHT",)}:
             return "reversible_ui"
+        if any(term in expected for term in REVERSIBLE_UI_EXPECTATION_TERMS):
+            return "reversible_ui"
         return "project_mutation"
     if action == "drag":
         if any(term in text for term in REVERSIBLE_DRAG_TERMS):
@@ -95,7 +100,7 @@ def classify_action_impact(plan: PlannedAction) -> str:
     if action in {"click", "double_click"}:
         # Clicking a project control can be UI-only when the expected state is
         # explicitly selection/focus/disclosure rather than a value/content change.
-        if any(term in expected for term in REVERSIBLE_CLICK_EXPECTATION_TERMS):
+        if any(term in expected for term in REVERSIBLE_UI_EXPECTATION_TERMS):
             return "reversible_ui"
         if any(term in text for term in PROJECT_MUTATION_TERMS):
             return "project_mutation"
