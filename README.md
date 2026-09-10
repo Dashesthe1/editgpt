@@ -213,3 +213,8 @@ These are local development endpoints only. A protected ChatGPT-facing route is 
 - Reuse the current After Effects process by default. Restart or close AE only when a proof specifically requires lifecycle behavior, AE is unhealthy, or isolation cannot safely be restored in-process.
 - **Do not redevelop an AE capability before checking AE-native commands.** Shortcut, Quick Apply, scripting API, and stable command-ID routes take precedence over custom UI tooling when they can perform the operation reliably.
 - Keep Eyes as evidence, Hands as guarded transport, and project-mutation authority in the Controller/task-contract layer regardless of command transport.
+### M5 temporal event localization
+
+`eyes_source_temporal_profile` now exposes cached transition, motion-extremum, acceleration, and luminance evidence. `eyes_source_find_event` adds a stable GPT-facing event locator for cuts/transitions, motion peaks, acceleration peaks, impacts, semantic appearance/disappearance, and action start/end boundaries. Machine signals narrow expensive semantic inspection; exact source frames remain the evidence authority.
+
+On the current workstation, TransNetV2 runs on CUDA and correctly identifies the major shot boundaries in the 24-second Spider-Man training clip. Full-source decode/profile construction is currently the dominant machine-analysis cost, while full-range semantic boundary search remains substantially slower and is an explicit optimization target rather than an interactive-speed claim.

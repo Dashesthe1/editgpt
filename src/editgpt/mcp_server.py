@@ -8,9 +8,11 @@ import numpy as np
 
 from .eyes.runtime import LiveEyesRuntime
 from .eyes.source import SourceCatalog
+from .eyes.temporal import TemporalAnalyzer
 
 _RUNTIME = LiveEyesRuntime(buffer_capacity=30)
 _SOURCES = SourceCatalog()
+_TEMPORAL = TemporalAnalyzer()
 
 
 def _require_cv2():
@@ -258,6 +260,28 @@ def build_server():
             "frame_index": index,
             "source_time_s": frame.metadata.get("source_time_s"),
         }
+
+    @mcp.tool()
+    def eyes_source_temporal_profile(source_id: str, force: bool = False) -> dict[str, Any]:
+        """Analyze and cache temporal structure, motion extrema, and transition candidates."""
+        reader = _SOURCES.get(source_id)
+        return _TEMPORAL.profile(reader, force=force).summary()
+
+    @mcp.tool()
+    def eyes_source_find_event(
+        source_id: str,
+        event_type: str,
+        description: str | None = None,
+        start_s: float = 0.0,
+        end_s: float | None = None,
+        tolerance_frames: int = 2,
+    ) -> dict[str, Any]:
+        """Locate a temporal event using machine signals and semantic verification when needed."""
+        reader = _SOURCES.get(source_id)
+        return _TEMPORAL.find_event(
+            reader, event_type=event_type, description=description,
+            start_s=start_s, end_s=end_s, tolerance_frames=tolerance_frames,
+        ).as_dict()
 
     @mcp.tool()
     def eyes_source_close(source_id: str) -> dict[str, Any]:

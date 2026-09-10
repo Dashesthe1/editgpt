@@ -37,3 +37,10 @@ def test_mcp_exposes_read_only_source_evidence_tools() -> None:
         "eyes_source_index_at_time",
         "eyes_source_close",
     }.issubset(names)
+
+
+def test_mcp_exposes_temporal_event_tools() -> None:
+    server = build_server()
+    tools = asyncio.run(server.list_tools())
+    names = {tool.name for tool in tools}
+    assert {"eyes_source_temporal_profile", "eyes_source_find_event"}.issubset(names)

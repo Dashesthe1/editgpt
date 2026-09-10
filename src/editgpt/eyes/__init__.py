@@ -10,6 +10,7 @@ from .source import (
     open_video_source,
     source_backend_health,
 )
+from .temporal import TemporalAnalyzer, TemporalCandidate, TemporalEventResult, TemporalProfile
 from .types import FramePacket, MotionObservation
 
 __all__ = [
@@ -20,6 +21,10 @@ __all__ = [
     "PyAVSourceReader",
     "PyNvVideoCodecSourceReader",
     "SourceCatalog",
+    "TemporalAnalyzer",
+    "TemporalCandidate",
+    "TemporalEventResult",
+    "TemporalProfile",
     "VideoSourceMetadata",
     "open_video_source",
     "source_backend_health",
