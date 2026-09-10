@@ -66,12 +66,8 @@ class HandsService:
         self.backend = backend
         self.state = HandsState(armed=False, allowed_processes=allowed)
 
-    def arm(self, allowed_processes: Sequence[str] | None = None) -> dict[str, Any]:
-        if allowed_processes is not None:
-            normalized = tuple(_normalize_process_name(name) for name in allowed_processes)
-            if not normalized:
-                raise ValueError("at least one allowed process is required")
-            self.state.allowed_processes = normalized
+    def arm(self) -> dict[str, Any]:
+        """Arm the immutable process allowlist configured when the service was created."""
         self.state.armed = True
         return self.status()
 
