@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-drag", "proof-semantic", "logs")]
+    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-drag", "proof-m4", "proof-semantic", "logs")]
     [string]$Action = "up",
     [ValidateSet("eyes_mcp", "hands_mcp", "semantic_qwen")]
     [string]$Service = "eyes_mcp",
@@ -31,6 +31,27 @@ function Refresh-ProcessPath {
 
 function Test-LlamaRuntime {
     return [bool]((Get-Command llama-server -ErrorAction SilentlyContinue) -or (Get-Command llama -ErrorAction SilentlyContinue))
+}
+
+function Test-SemanticReady {
+    try {
+        $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:8080/v1/models" -TimeoutSec 2
+        return $response.StatusCode -eq 200
+    } catch {
+        return $false
+    }
+}
+
+function Wait-SemanticReady {
+    param([int]$TimeoutSeconds = 900)
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        if (Test-SemanticReady) {
+            return $true
+        }
+        Start-Sleep -Seconds 1
+    }
+    return (Test-SemanticReady)
 }
 
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
@@ -83,7 +104,7 @@ if ($needsBootstrap) {
     Write-Host "Environment already validated for commit $($currentCommit.Substring(0, 8))."
 }
 
-$needsSemantic = (-not $NoSemantic) -and ($Action -in @("up", "proof-semantic", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-drag"))
+$needsSemantic = (-not $NoSemantic) -and ($Action -in @("up", "proof-semantic", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-drag", "proof-m4"))
 if ($needsSemantic -and -not (Test-LlamaRuntime)) {
     Write-Host "Semantic runtime is missing; installing/locating llama.cpp automatically..."
     Invoke-Checked {
@@ -140,6 +161,18 @@ switch ($Action) {
     }
     "proof-drag" {
         Invoke-Checked { & $ControlExe proof drag } "Drag proof failed."
+    }
+    "proof-m4" {
+        if ($NoSemantic) {
+            throw "proof-m4 requires the semantic verifier; do not use -NoSemantic."
+        }
+        Invoke-Checked { & $ControlExe up } "EditGPT service startup failed before the M4 proof."
+        if (-not (Wait-SemanticReady)) {
+            throw "The local semantic verifier did not become ready for the M4 proof."
+        }
+        Invoke-Checked {
+            & $VenvPython (Join-Path $Root "scripts\prove_m4_transaction.py")
+        } "M4 live transaction proof failed."
     }
     "proof-semantic" {
         Invoke-Checked { & $ControlExe proof semantic } "Semantic proof failed."
