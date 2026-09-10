@@ -177,11 +177,10 @@ def _compact_history(history: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     for step in list(history)[-6:]:
         plan = step.get("plan") if isinstance(step.get("plan"), dict) else {}
         final = step.get("final_verification") if isinstance(step.get("final_verification"), dict) else {}
-        compact.append({
+        record = {
             "step": step.get("step"),
             "status": plan.get("status"),
             "action": plan.get("action_type"),
-            "command": plan.get("command"),
             "target": plan.get("target"),
             "expected": plan.get("expected"),
             "verified": step.get("verified"),
@@ -189,7 +188,10 @@ def _compact_history(history: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
             "stale_before_action": bool(step.get("stale_before_action", False)),
             "final_verification_ok": final.get("ok"),
             "final_verification_reason": final.get("reason"),
-        })
+        }
+        if plan.get("command"):
+            record["command"] = plan.get("command")
+        compact.append(record)
     return compact
 
 
