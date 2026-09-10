@@ -1,5 +1,23 @@
 $ErrorActionPreference = "Stop"
 
+function Refresh-ProcessPath {
+    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
+    $user = [Environment]::GetEnvironmentVariable("Path", "User")
+    $env:Path = "$machine;$user"
+}
+
+function Find-LlamaRuntime {
+    $server = Get-Command llama-server -ErrorAction SilentlyContinue
+    if ($server) {
+        return @{ Mode = "llama-server"; Path = $server.Source }
+    }
+    $meta = Get-Command llama -ErrorAction SilentlyContinue
+    if ($meta) {
+        return @{ Mode = "llama-serve"; Path = $meta.Source }
+    }
+    return $null
+}
+
 Write-Host "EditGPT Eyes semantic setup"
 Write-Host "Target live semantic model: Qwen3-VL-8B-Instruct Q8_0"
 Write-Host "Inference runtime: llama.cpp on localhost only"
@@ -9,35 +27,29 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     throw "winget was not found. Install/update App Installer from Microsoft, then rerun this script."
 }
 
-$Llama = Get-Command llama -ErrorAction SilentlyContinue
-if (-not $Llama) {
+$Runtime = Find-LlamaRuntime
+if (-not $Runtime) {
     Write-Host "llama.cpp is not installed. Installing the official WinGet package..."
     & winget install --id ggml.llamacpp -e --accept-package-agreements --accept-source-agreements
     if ($LASTEXITCODE -ne 0) {
         throw "llama.cpp installation failed with exit code $LASTEXITCODE"
     }
-    $Llama = Get-Command llama -ErrorAction SilentlyContinue
+    Refresh-ProcessPath
+    $Runtime = Find-LlamaRuntime
 }
 
-if (-not $Llama) {
-    Write-Host "llama.cpp was installed, but this PowerShell session does not see the new PATH entry yet."
-    Write-Host "Close PowerShell, open a new PowerShell window, return to $PWD, and rerun this script."
-    exit 0
+if (-not $Runtime) {
+    throw "llama.cpp installed but no llama-server/llama command is visible after refreshing PATH. Open a new PowerShell window and rerun EditGPT."
 }
 
 Write-Host ""
-Write-Host "llama.cpp detected: $($Llama.Source)"
-& llama --version
+Write-Host "llama.cpp detected: $($Runtime.Path)"
+& $Runtime.Path --version
 if ($LASTEXITCODE -ne 0) {
     throw "llama.cpp is installed but failed its version check."
 }
 
 Write-Host ""
-Write-Host "Semantic runtime setup is ready."
-Write-Host ""
-Write-Host "In PowerShell window 1, start the local Qwen server with:"
-Write-Host "llama serve -hf Qwen/Qwen3-VL-8B-Instruct-GGUF:Q8_0 --host 127.0.0.1 --port 8080 -ngl 99 -c 8192"
-Write-Host ""
-Write-Host "The first launch downloads roughly 9.5 GB of official Qwen model + vision-projector files."
-Write-Host "Leave that server running. Then in PowerShell window 2 run:"
-Write-Host ".\.venv\Scripts\python.exe .\scripts\prove_semantic.py"
+Write-Host "Semantic runtime setup is ready for the EditGPT orchestrator."
+Write-Host "The orchestrator will start Qwen automatically and keep its log under .editgpt\logs\semantic_qwen.log."
+Write-Host "The first Qwen launch will download the official model + vision projector automatically."
