@@ -23,6 +23,11 @@ REVERSIBLE_CLICK_TERMS = (
     "menu", "dropdown", "tab", "panel", "search field", "search box",
     "timeline ruler", "toolbar", "workspace",
 )
+REVERSIBLE_CLICK_EXPECTATION_TERMS = (
+    "is selected", "is highlighted", "field is focused", "field is active",
+    "is expanded", "is collapsed", "dropdown is visible", "menu is open",
+    "submenu is visible", "panel is active", "panel is focused",
+)
 
 
 @dataclass(frozen=True)
@@ -72,6 +77,7 @@ def classify_action_impact(plan: PlannedAction) -> str:
 
     action = plan.action_type
     text = " ".join(filter(None, (plan.target, plan.destination, plan.expected))).lower()
+    expected = plan.expected.lower()
     if any(term in text for term in DESTRUCTIVE_TERMS):
         return "destructive"
 
@@ -87,6 +93,10 @@ def classify_action_impact(plan: PlannedAction) -> str:
             return "reversible_ui"
         return "project_mutation"
     if action in {"click", "double_click"}:
+        # Clicking a project control can be UI-only when the expected state is
+        # explicitly selection/focus/disclosure rather than a value/content change.
+        if any(term in expected for term in REVERSIBLE_CLICK_EXPECTATION_TERMS):
+            return "reversible_ui"
         if any(term in text for term in PROJECT_MUTATION_TERMS):
             return "project_mutation"
         if any(term in text for term in REVERSIBLE_CLICK_TERMS):
