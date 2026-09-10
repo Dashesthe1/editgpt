@@ -46,7 +46,7 @@ class RollbackVerification:
 
 @dataclass(frozen=True)
 class EditingTaskContract:
-    """Explicit authority for a bounded intentional After Effects edit task."""
+    """Explicit authority for a bounded, undoable After Effects editing task."""
 
     task_id: str
     goal: str
@@ -55,7 +55,6 @@ class EditingTaskContract:
     max_mutations: int = 1
     rollback_keys: tuple[str, ...] = ("CTRL", "Z")
     rollback_max_changed_fraction: float = 0.08
-    allow_destructive: bool = False
 
     def __post_init__(self) -> None:
         task_id = self.task_id.strip()
@@ -89,13 +88,13 @@ class EditingTaskContract:
         return (
             f"task_id={self.task_id}; allowed mutation kinds={', '.join(self.allowed_mutations)}; "
             f"allowed target terms={targets}; maximum committed mutations={self.max_mutations}; "
-            "destructive actions are " + ("explicitly authorized" if self.allow_destructive else "not authorized")
+            "destructive actions are not authorized"
         )
 
     def authorize(self, plan: PlannedAction, *, committed_mutations: int) -> ScopeDecision:
         impact = classify_action_impact(plan)
-        if impact == "destructive" and not self.allow_destructive:
-            return ScopeDecision(False, (), "destructive action is outside the editing task contract")
+        if impact == "destructive":
+            return ScopeDecision(False, (), "destructive action is outside the M4 editing task contract")
         if impact != "project_mutation":
             return ScopeDecision(True, (), "action does not consume project-mutation scope")
         if committed_mutations >= self.max_mutations:
