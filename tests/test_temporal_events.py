@@ -16,7 +16,13 @@ class _Obs:
 
 
 class _Semantic:
+    def __init__(self) -> None:
+        self.calls = 0
+        self.images = 0
+
     def observe_images(self, images, *, prompt, labels=None, **kwargs):
+        self.calls += 1
+        self.images += len(images)
         frames = []
         for label in labels or []:
             index = int(label.split("index=")[1].split()[0])
@@ -92,3 +98,19 @@ def test_semantic_disappearance_can_report_not_found(tmp_path: Path) -> None:
     result = analyzer.find_event(reader, event_type="disappearance", description="the subject is visible")
     assert result.found is False
     assert result.frame_index is None
+
+
+def test_semantic_repeat_reuses_exact_frame_cache(tmp_path: Path) -> None:
+    path = tmp_path / "fixture.mp4"
+    path.write_bytes(b"fixture")
+    reader = _Reader(path)
+    semantic = _Semantic()
+    analyzer = TemporalAnalyzer(prefer_transnet=False, semantic_client=semantic)
+    analyzer._profiles[analyzer._cache_key(path)] = _profile(path)
+    first = analyzer.find_event(reader, event_type="appearance", description="the subject is visible", tolerance_frames=1)
+    calls, images = semantic.calls, semantic.images
+    second = analyzer.find_event(reader, event_type="appearance", description="the subject is visible", tolerance_frames=1)
+    assert second.frame_index == first.frame_index
+    assert second.bracket == first.bracket
+    assert semantic.calls == calls
+    assert semantic.images == images
