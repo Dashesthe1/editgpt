@@ -5,6 +5,7 @@ from typing import Any
 
 import numpy as np
 
+from .ae_commands import get_ae_command
 from .planner import PlannedAction
 from .policy import classify_action_impact
 
@@ -128,6 +129,13 @@ class EditingTaskContract:
 def classify_mutation_kinds(plan: PlannedAction) -> tuple[str, ...]:
     if classify_action_impact(plan) != "project_mutation":
         return ()
+    if plan.action_type == "ae_command" and plan.command:
+        try:
+            kinds = get_ae_command(plan.command).mutation_kinds
+        except KeyError:
+            kinds = ()
+        if kinds:
+            return kinds
     text = " ".join(
         value for value in (plan.target, plan.destination, plan.expected) if value
     ).lower()
