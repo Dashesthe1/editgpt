@@ -27,8 +27,14 @@ MOUSEEVENTF_RIGHTDOWN = 0x0008
 MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_XDOWN = 0x0080
+MOUSEEVENTF_XUP = 0x0100
 MOUSEEVENTF_WHEEL = 0x0800
 MOUSEEVENTF_HWHEEL = 0x1000
+XBUTTON1 = 0x0001
+XBUTTON2 = 0x0002
+WHEEL_DELTA = 120
+SCROLL_PIXELS_PER_NOTCH = 120
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 SW_RESTORE = 9
 SM_XVIRTUALSCREEN = 76
@@ -78,9 +84,12 @@ class INPUT(ctypes.Structure):
 
 
 _MOUSE_BUTTONS = {
-    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP),
-    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP),
-    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP),
+    "left": (MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, 0),
+    "right": (MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, 0),
+    "middle": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
+    "wheel": (MOUSEEVENTF_MIDDLEDOWN, MOUSEEVENTF_MIDDLEUP, 0),
+    "back": (MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON1),
+    "forward": (MOUSEEVENTF_XDOWN, MOUSEEVENTF_XUP, XBUTTON2),
 }
 
 _NAMED_KEYS = {
@@ -165,6 +174,7 @@ class WindowsInputBackend:
             "backend": "win32_sendinput",
             "virtual_screen": {"left": left, "top": top, "width": width, "height": height},
             "cursor": {"x": point.x, "y": point.y},
+            "scroll_pixels_per_notch": SCROLL_PIXELS_PER_NOTCH,
         }
 
     def foreground_window(self) -> dict[str, Any]:
@@ -201,7 +211,10 @@ class WindowsInputBackend:
         hwnd = int(target["hwnd"])
         user32.ShowWindow(hwnd, SW_RESTORE)
         if not user32.SetForegroundWindow(hwnd):
-            raise RuntimeError(f"Windows refused to foreground {process_name!r}")
+            raise RuntimeError(
+                f"Windows refused to foreground {process_name!r}; foreground-lock rules may require the user "
+                "to activate After Effects once before automation takes over"
+            )
         time.sleep(0.05)
         return self._window_info(hwnd)
 
@@ -217,18 +230,23 @@ class WindowsInputBackend:
             raise ValueError(f"unsupported mouse button: {button}")
         if count < 1 or count > 3:
             raise ValueError("click count must be between 1 and 3")
-        down_flag, up_flag = _MOUSE_BUTTONS[normalized]
+        down_flag, up_flag, mouse_data = _MOUSE_BUTTONS[normalized]
         for index in range(count):
-            self._send_mouse(down_flag)
-            self._send_mouse(up_flag)
+            self._send_mouse(down_flag, mouse_data=mouse_data)
+            self._send_mouse(up_flag, mouse_data=mouse_data)
             if index + 1 < count:
                 time.sleep(0.06)
 
     def scroll(self, delta_x: int = 0, delta_y: int = 0) -> None:
+        """Scroll using computer-use pixel-delta semantics.
+
+        Positive vertical pixels mean down, while Win32 wheel deltas use the
+        opposite sign. Native wheel input is quantized to 120-unit notches.
+        """
         if delta_y:
-            self._send_mouse(MOUSEEVENTF_WHEEL, mouse_data=delta_y)
+            self._send_mouse(MOUSEEVENTF_WHEEL, mouse_data=self._pixel_scroll_to_wheel(delta_y, invert=True))
         if delta_x:
-            self._send_mouse(MOUSEEVENTF_HWHEEL, mouse_data=delta_x)
+            self._send_mouse(MOUSEEVENTF_HWHEEL, mouse_data=self._pixel_scroll_to_wheel(delta_x, invert=False))
 
     def press_keys(self, keys: Sequence[str]) -> None:
         if not keys:
@@ -250,15 +268,15 @@ class WindowsInputBackend:
             raise ValueError(f"unsupported mouse button: {button}")
         if len(path) < 2:
             raise ValueError("drag path requires at least two points")
-        down_flag, up_flag = _MOUSE_BUTTONS[normalized]
+        down_flag, up_flag, mouse_data = _MOUSE_BUTTONS[normalized]
         self.move(*path[0])
-        self._send_mouse(down_flag)
+        self._send_mouse(down_flag, mouse_data=mouse_data)
         try:
             for point in path[1:]:
                 self.move(*point)
                 time.sleep(0.01)
         finally:
-            self._send_mouse(up_flag)
+            self._send_mouse(up_flag, mouse_data=mouse_data)
 
     def _window_info(self, hwnd: int) -> dict[str, Any]:
         assert user32 is not None
@@ -316,6 +334,15 @@ class WindowsInputBackend:
                 f"[{left}, {top}, {left + width - 1}, {top + height - 1}]"
             )
 
+    @staticmethod
+    def _pixel_scroll_to_wheel(pixels: int, *, invert: bool) -> int:
+        if pixels == 0:
+            return 0
+        sign = 1 if pixels > 0 else -1
+        notches = max(1, int(round(abs(pixels) / SCROLL_PIXELS_PER_NOTCH)))
+        wheel = sign * notches * WHEEL_DELTA
+        return -wheel if invert else wheel
+
     def _send_mouse(self, flags: int, *, mouse_data: int = 0) -> None:
         event = INPUT()
         event.type = INPUT_MOUSE
@@ -350,9 +377,16 @@ class WindowsInputBackend:
 
     def _send_input(self, event: INPUT) -> None:
         assert user32 is not None
+        ctypes.set_last_error(0)
         sent = user32.SendInput(1, ctypes.byref(event), ctypes.sizeof(INPUT))
         if sent != 1:
-            raise ctypes.WinError(ctypes.get_last_error())
+            error = ctypes.get_last_error()
+            if error:
+                raise ctypes.WinError(error)
+            raise RuntimeError(
+                "SendInput did not inject the event. Windows UIPI can block input when After Effects is running "
+                "at a higher integrity level than EditGPT."
+            )
 
     @staticmethod
     def _virtual_key(key: str) -> int:
