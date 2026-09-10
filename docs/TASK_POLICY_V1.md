@@ -19,22 +19,26 @@ Ambiguous actions fail closed by default.
 
 ## Policies
 
-`TaskPolicy.ui_proof()` permits only reversible UI actions. This is the default for Controller proof runs.
+`TaskPolicy.ui_proof()` permits only reversible UI actions. This remains the default whenever no structured editing task is attached.
 
-`TaskPolicy.editing()` permits reversible UI actions and project mutation, but still blocks destructive operations unless `allow_destructive=True` is explicitly selected by a higher-level task contract.
+`TaskPolicy.editing()` can admit non-destructive project-mutation impact, but M4 adds a second required authorization layer: an `EditingTaskContract` must independently approve the mutation kind, target scope, and remaining mutation budget before Hands can execute it.
+
+Passing `safe_mode=False` alone no longer selects the editing policy in `LiveController`; project mutation requires the explicit structured task contract.
 
 ## Controller integration
 
-Before every `act` plan, `LiveController` now records a `PolicyDecision` and refuses execution when the decision is not allowed. The policy decision is included in controller history alongside the plan, grounding evidence, Hands result, and visual verification.
+Before every `act` plan, `LiveController` records a `PolicyDecision` and refuses execution when the decision is not allowed. For project mutations, it also records the M4 scope decision. The model cannot self-authorize either layer.
 
 This does not replace the existing Hands process allowlist, foreground checks, geometry guards, freshness checks, or semantic verification. It is an additional authorization layer.
 
-Safe-mode keyboard navigation now permits Escape, directional arrows, and Home. This is enough for reversible menu/timeline navigation without opening the full shortcut surface to proof runs. The Hands backend separately supports common OEM punctuation keys needed by later After Effects editing shortcuts.
+Safe-mode keyboard navigation permits Escape, directional arrows, and Home. The Hands backend separately supports common OEM punctuation keys used by After Effects shortcuts, but those keys do not become authorized merely because Hands can physically send them.
 
 ## Live regression
 
-After adding the policy gate, the real After Effects File -> Edit controller proof was rerun. The policy classified both menu clicks as `reversible_ui` and allowed them. The visual loop still rejected failed intermediate clicks, retried from fresh Eyes evidence, opened Edit, and completed only after a separate final visible-state verification passed.
+After adding the policy gate, the real After Effects File -> Edit controller proof classified both menu clicks as `reversible_ui` and allowed them. The visual loop still rejected failed intermediate clicks, retried from fresh Eyes evidence, opened Edit, and completed only after a separate final visible-state verification passed.
 
-## Next gate
+## M4 transactional gate
 
-Before EditGPT intentionally changes project content, add structured editing-task state with explicit mutation scope and a rollback/undo verification contract. Project-mutation mode should never be enabled merely because the planner asks for it.
+M4 implements the former next gate: structured editing-task state with explicit mutation scope and rollback/undo verification. An authorized mutation is committed only after fresh visual verification. A failed post-mutation verification triggers the contract-owned rollback chord and fresh deterministic rollback evidence, then the controller stops rather than continuing from uncertain state.
+
+See `docs/EDITING_TASK_V1.md` for the complete contract and transaction lifecycle.
