@@ -2,7 +2,7 @@
 
 EditGPT is a new project for building GPT into a professional After Effects editor by giving it human-like senses and control while retaining machine-precision tools.
 
-## Current milestone: Eyes v1 + Hands v1 integration
+## Current milestone: Eyes + Hands observe-act-verify bridge
 
 Eyes remains the first and highest-priority perception subsystem. The goal is not "periodic screenshots"; it is a complete visual service that lets GPT request reliable evidence about live After Effects playback and exact source footage.
 
@@ -75,7 +75,7 @@ Current Hands contract:
 - accepts a compact computer-use-style action object so hosted or local controllers can share the same execution surface;
 - keeps screenshots and visual reasoning in Eyes.
 
-The first live Hands proof is non-destructive: it focuses After Effects, reads the current cursor coordinate, sends a move to that exact same coordinate, and disarms again. See `docs/HANDS_V1.md`.
+The live Hands proof is non-destructive. The paired controller bridge now also normalizes DPI to physical pixels, exposes Eyes encoded/capture geometry, safely maps model-visible coordinates to screen coordinates, and fails closed when multi-monitor geometry is ambiguous.
 
 ## Semantic Eyes stage
 
@@ -121,6 +121,7 @@ Run the current proofs with:
 .\editgpt.ps1 -Action proof-capture
 .\editgpt.ps1 -Action proof-mcp
 .\editgpt.ps1 -Action proof-hands
+.\editgpt.ps1 -Action proof-loop
 .\editgpt.ps1 -Action proof-semantic
 ```
 
