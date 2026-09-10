@@ -6,7 +6,7 @@ from typing import Any, Sequence
 
 import numpy as np
 
-from editgpt.controller.ae_commands import AE_COMMANDS, get_ae_command
+from editgpt.controller.ae_commands import command_keys_for_goal, get_ae_command
 from editgpt.eyes.semantic import LocalQwenVLClient, SemanticObservation
 
 _ALLOWED_ACTIONS = {
@@ -207,7 +207,7 @@ def choose_next_action(
     if not goal.strip():
         raise ValueError("controller goal must not be empty")
     history_text = json.dumps(_compact_history(history), ensure_ascii=False)
-    command_text = ", ".join(sorted(AE_COMMANDS))
+    command_text = ", ".join(command_keys_for_goal(goal))
     safe_rule = (
         "Safe proof mode is ON. Do not save, close a project, exit, delete, remove, type text, "
         "double-click, or use raw keyboard shortcuts except the permitted navigation keys. Registered ae_command actions are allowed only when their impact is reversible UI."
@@ -221,7 +221,7 @@ Recent history JSON: {history_text}
 {safe_rule}
 
 Prefer a registered After Effects command over mouse navigation when it directly performs the required operation.
-Registered AE command keys: {command_text}
+Relevant registered AE command keys: {command_text}
 
 Choose exactly one next step. Return ONLY JSON with these keys:
 status: "act", "done", or "blocked"
