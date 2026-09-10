@@ -94,8 +94,8 @@ def test_focus_is_limited_to_allowlist() -> None:
     assert backend.calls[-1][0] == "focus"
 
 
-def test_custom_allowlist_is_normalized() -> None:
+def test_configured_allowlist_is_normalized_and_not_replaced_by_arm() -> None:
     backend = FakeBackend()
-    service = HandsService(backend)
-    service.arm(["  AfterFX.EXE  "])
+    service = HandsService(backend, default_allowed_processes=["  AfterFX.EXE  "])
+    service.arm()
     assert service.status()["allowed_processes"] == ["afterfx.exe"]
