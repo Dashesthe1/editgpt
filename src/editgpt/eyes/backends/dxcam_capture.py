@@ -32,12 +32,16 @@ class DXCamCapture(CaptureBackend):
                 "DXcam is not installed. Install editgpt[capture] on Windows."
             ) from exc
 
+        self._monitor_index = monitor_index
         self._region = region
         self._camera = dxcam.create(
             output_idx=monitor_index,
             output_color=output_color,
         )
         self._running = False
+        camera_region = tuple(int(v) for v in self._camera.region)
+        self._output_region_pixels = camera_region
+        self._capture_region_pixels = tuple(int(v) for v in (region or camera_region))
 
     def frames(self, *, fps: int = 60) -> Iterator[FramePacket]:
         if fps <= 0:
@@ -76,7 +80,13 @@ class DXCamCapture(CaptureBackend):
                     timestamp_ns=timestamp_ns,
                     image=np.array(image, copy=True),
                     source="dxcam",
-                    metadata={"capture_timestamp_s": capture_timestamp},
+                    metadata={
+                        "capture_timestamp_s": capture_timestamp,
+                        "monitor_index": self._monitor_index,
+                        "output_region_pixels": list(self._output_region_pixels),
+                        "capture_region_pixels": list(self._capture_region_pixels),
+                        "coordinate_space": "dxcam_output_pixels",
+                    },
                 )
         finally:
             self.close()

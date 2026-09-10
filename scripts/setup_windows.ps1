@@ -12,13 +12,13 @@ function Invoke-Checked {
     }
 }
 
-Write-Host "EditGPT Eyes v0.1 Windows bootstrap"
+Write-Host "EditGPT v0.1 Windows bootstrap"
 
 if (-not (Get-Command py -ErrorAction SilentlyContinue)) {
     throw "Python launcher 'py' was not found. Install Python 3.12 first."
 }
 
-Invoke-Checked { py -3.12 -c "import sys; print(sys.version)" } "Python 3.12 is required for the current Eyes toolchain."
+Invoke-Checked { py -3.12 -c "import sys; print(sys.version)" } "Python 3.12 is required for the current EditGPT toolchain."
 
 if (-not (Test-Path ".venv")) {
     Invoke-Checked { py -3.12 -m venv .venv } "Failed to create the Python virtual environment."
@@ -32,8 +32,15 @@ Invoke-Checked { & $Python scripts/check_env.py } "Environment probe failed."
 
 Write-Host ""
 Write-Host "Bootstrap complete."
-Write-Host "Live capture proof:"
-Write-Host ".\.venv\Scripts\editgpt-eyes.exe capture --seconds 5 --fps 60"
+Write-Host "Normal service launcher:"
+Write-Host ".\editgpt.ps1"
 Write-Host ""
-Write-Host "Local-only Eyes MCP proof:"
-Write-Host ".\.venv\Scripts\editgpt-eyes-mcp.exe --transport streamable-http --host 127.0.0.1 --port 8765"
+Write-Host "Live proof commands:"
+Write-Host ".\editgpt.ps1 -Action proof-capture"
+Write-Host ".\editgpt.ps1 -Action proof-mcp"
+Write-Host ".\editgpt.ps1 -Action proof-hands"
+Write-Host ".\editgpt.ps1 -Action proof-loop"
+Write-Host ".\editgpt.ps1 -Action proof-semantic-pointer"
+Write-Host ".\editgpt.ps1 -Action proof-semantic-click"
+Write-Host ".\editgpt.ps1 -Action proof-hands-ui"
+Write-Host ".\editgpt.ps1 -Action proof-semantic"

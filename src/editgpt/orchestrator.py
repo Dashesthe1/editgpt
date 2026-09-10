@@ -17,6 +17,8 @@ from typing import Any, Callable
 
 MCP_HOST = "127.0.0.1"
 MCP_PORT = 8765
+HANDS_MCP_HOST = "127.0.0.1"
+HANDS_MCP_PORT = 8766
 SEMANTIC_HOST = "127.0.0.1"
 SEMANTIC_PORT = 8080
 SEMANTIC_MODELS_URL = f"http://{SEMANTIC_HOST}:{SEMANTIC_PORT}/v1/models"
@@ -73,6 +75,12 @@ class EditGPTOrchestrator:
                     "endpoint": f"http://{MCP_HOST}:{MCP_PORT}/mcp",
                     "record": services.get("eyes_mcp"),
                 },
+                "hands_mcp": {
+                    "ready": _port_open(HANDS_MCP_HOST, HANDS_MCP_PORT),
+                    "endpoint": f"http://{HANDS_MCP_HOST}:{HANDS_MCP_PORT}/mcp",
+                    "write_capable": True,
+                    "record": services.get("hands_mcp"),
+                },
                 "semantic_qwen": {
                     "ready": _http_json_ready(SEMANTIC_MODELS_URL),
                     "endpoint": SEMANTIC_MODELS_URL,
@@ -84,7 +92,10 @@ class EditGPTOrchestrator:
         }
 
     def up(self, *, with_semantic: bool = True) -> dict[str, Any]:
-        result: dict[str, Any] = {"eyes_mcp": self.start_eyes_mcp()}
+        result: dict[str, Any] = {
+            "eyes_mcp": self.start_eyes_mcp(),
+            "hands_mcp": self.start_hands_mcp(),
+        }
         if with_semantic:
             result["semantic_qwen"] = self.start_semantic_qwen()
         result["status"] = self.status()
@@ -114,6 +125,32 @@ class EditGPTOrchestrator:
             "reason": "listener_did_not_become_ready",
             **record.as_dict(),
             "log_tail": self.log_tail("eyes_mcp"),
+        }
+
+    def start_hands_mcp(self, *, wait_s: float = 12.0) -> dict[str, Any]:
+        if _port_open(HANDS_MCP_HOST, HANDS_MCP_PORT):
+            return {"ok": True, "started": False, "reason": "already_listening"}
+
+        command = [
+            sys.executable,
+            "-m",
+            "editgpt.hands_mcp_server",
+            "--transport",
+            "streamable-http",
+            "--host",
+            HANDS_MCP_HOST,
+            "--port",
+            str(HANDS_MCP_PORT),
+        ]
+        record = self._spawn("hands_mcp", command)
+        if _wait_until(lambda: _port_open(HANDS_MCP_HOST, HANDS_MCP_PORT), wait_s):
+            return {"ok": True, "started": True, **record.as_dict()}
+        return {
+            "ok": False,
+            "started": True,
+            "reason": "listener_did_not_become_ready",
+            **record.as_dict(),
+            "log_tail": self.log_tail("hands_mcp"),
         }
 
     def start_semantic_qwen(self, *, wait_s: float = 15.0) -> dict[str, Any]:
@@ -164,6 +201,7 @@ class EditGPTOrchestrator:
     def down(self) -> dict[str, Any]:
         results = {
             "eyes_mcp": self._stop_known_process("eyes_mcp"),
+            "hands_mcp": self._stop_known_process("hands_mcp"),
             "semantic_qwen": self._stop_known_process("semantic_qwen"),
         }
         return {"type": "editgpt_orchestrator_down", "results": results}
@@ -184,6 +222,11 @@ class EditGPTOrchestrator:
         scripts = {
             "capture": self.root / "scripts" / "probe_capture_modes.py",
             "mcp": self.root / "scripts" / "prove_mcp.py",
+            "hands": self.root / "scripts" / "prove_hands.py",
+            "loop": self.root / "scripts" / "prove_observe_act_verify.py",
+            "semantic-pointer": self.root / "scripts" / "prove_semantic_pointer.py",
+            "semantic-click": self.root / "scripts" / "prove_semantic_click.py",
+            "hands-ui": self.root / "scripts" / "prove_hands_ui.py",
             "semantic": self.root / "scripts" / "prove_semantic.py",
         }
         if name not in scripts:
@@ -194,6 +237,23 @@ class EditGPTOrchestrator:
             if not start.get("ok"):
                 print(json.dumps(start, indent=2))
                 return 2
+        elif name == "hands":
+            start = self.start_hands_mcp()
+            if not start.get("ok"):
+                print(json.dumps(start, indent=2))
+                return 5
+        elif name == "loop":
+            for start in (self.start_eyes_mcp(), self.start_hands_mcp()):
+                if not start.get("ok"):
+                    print(json.dumps(start, indent=2))
+                    return 6
+        elif name in {"semantic-pointer", "semantic-click", "hands-ui"}:
+            for start in (self.start_eyes_mcp(), self.start_hands_mcp(), self.start_semantic_qwen()):
+                if not start.get("ok"):
+                    print(json.dumps(start, indent=2))
+                    return 7
+            if not self.wait_for_semantic():
+                return 8
         elif name == "semantic":
             start = self.start_semantic_qwen()
             if not start.get("ok"):
@@ -430,17 +490,17 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     up = sub.add_parser("up", help="start current EditGPT local services")
-    up.add_argument("--no-semantic", action="store_true", help="start MCP only")
+    up.add_argument("--no-semantic", action="store_true", help="start MCP services only")
 
     sub.add_parser("status", help="show repo, AE, service, and artifact status")
     sub.add_parser("down", help="stop only services previously started by EditGPT")
     sub.add_parser("doctor", help="run tests/environment checks and print status")
 
     proof = sub.add_parser("proof", help="run one current proof")
-    proof.add_argument("name", choices=("capture", "mcp", "semantic"))
+    proof.add_argument("name", choices=("capture", "mcp", "hands", "loop", "semantic-pointer", "semantic-click", "hands-ui", "semantic"))
 
     logs = sub.add_parser("logs", help="show the tail of a managed service log")
-    logs.add_argument("service", choices=("eyes_mcp", "semantic_qwen"))
+    logs.add_argument("service", choices=("eyes_mcp", "hands_mcp", "semantic_qwen"))
     logs.add_argument("--lines", type=int, default=40)
     return parser
 

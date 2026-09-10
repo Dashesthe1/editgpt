@@ -1,7 +1,7 @@
 param(
-    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-semantic", "logs")]
+    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-semantic", "logs")]
     [string]$Action = "up",
-    [ValidateSet("eyes_mcp", "semantic_qwen")]
+    [ValidateSet("eyes_mcp", "hands_mcp", "semantic_qwen")]
     [string]$Service = "eyes_mcp",
     [switch]$NoUpdate,
     [switch]$ForceBootstrap,
@@ -66,6 +66,14 @@ $stampedCommit = if (Test-Path $StampPath) { (Get-Content $StampPath -Raw).Trim(
 $needsBootstrap = $ForceBootstrap -or (-not (Test-Path $VenvPython)) -or ($stampedCommit -ne $currentCommit)
 
 if ($needsBootstrap) {
+    $ExistingControlExe = Join-Path $Root ".venv\Scripts\editgpt-control.exe"
+    if (Test-Path $ExistingControlExe) {
+        Write-Host "Stopping managed EditGPT services before revision bootstrap..."
+        & $ExistingControlExe down | Out-Host
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Unable to stop one or more managed EditGPT services before bootstrap; continuing with validation."
+        }
+    }
     Write-Host "Bootstrapping/validating this EditGPT revision..."
     Invoke-Checked {
         & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $Root "scripts\setup_windows.ps1")
@@ -75,7 +83,7 @@ if ($needsBootstrap) {
     Write-Host "Environment already validated for commit $($currentCommit.Substring(0, 8))."
 }
 
-$needsSemantic = (-not $NoSemantic) -and ($Action -eq "up" -or $Action -eq "proof-semantic")
+$needsSemantic = (-not $NoSemantic) -and ($Action -in @("up", "proof-semantic", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui"))
 if ($needsSemantic -and -not (Test-LlamaRuntime)) {
     Write-Host "Semantic runtime is missing; installing/locating llama.cpp automatically..."
     Invoke-Checked {
@@ -110,7 +118,22 @@ switch ($Action) {
         Invoke-Checked { & $ControlExe proof capture } "Capture proof failed."
     }
     "proof-mcp" {
-        Invoke-Checked { & $ControlExe proof mcp } "MCP proof failed."
+        Invoke-Checked { & $ControlExe proof mcp } "Eyes MCP proof failed."
+    }
+    "proof-hands" {
+        Invoke-Checked { & $ControlExe proof hands } "Hands MCP proof failed."
+    }
+    "proof-loop" {
+        Invoke-Checked { & $ControlExe proof loop } "Observe-act-verify proof failed."
+    }
+    "proof-semantic-pointer" {
+        Invoke-Checked { & $ControlExe proof semantic-pointer } "Semantic pointer proof failed."
+    }
+    "proof-semantic-click" {
+        Invoke-Checked { & $ControlExe proof semantic-click } "Semantic click proof failed."
+    }
+    "proof-hands-ui" {
+        Invoke-Checked { & $ControlExe proof hands-ui } "Hands UI interaction proof failed."
     }
     "proof-semantic" {
         Invoke-Checked { & $ControlExe proof semantic } "Semantic proof failed."

@@ -2,9 +2,11 @@
 
 EditGPT is a new project for building GPT into a professional After Effects editor by giving it human-like senses and control while retaining machine-precision tools.
 
-## Current milestone: Eyes v1
+## Current milestone: Eyes + Hands observe-act-verify bridge
 
-Eyes is the first and highest-priority subsystem. The goal is not "periodic screenshots"; it is a complete visual service that lets GPT request reliable evidence about live After Effects playback and exact source footage.
+Eyes remains the first and highest-priority perception subsystem. The goal is not "periodic screenshots"; it is a complete visual service that lets GPT request reliable evidence about live After Effects playback and exact source footage.
+
+Hands is now being added as a separate write-capable subsystem so GPT can execute mouse and keyboard actions without weakening the read-only Eyes boundary.
 
 The target stack is intentionally capability-first and local/no-recurring-inference-cost where practical:
 
@@ -17,8 +19,9 @@ The target stack is intentionally capability-first and local/no-recurring-infere
 - **PyNvVideoCodec** — GPU source-footage decode on NVIDIA hardware.
 - **FFmpeg/PyAV** — exact-source compatibility/fallback decode.
 - **TransNetV2 / PySceneDetect** — shot-boundary detection.
+- **Native Win32 SendInput** — local deterministic mouse/keyboard execution for Hands.
 
-The codebase exposes these systems through a stable Eyes API so GPT never needs to know which backend produced an observation.
+The codebase exposes these systems through stable Eyes and Hands APIs so GPT never needs to know which backend produced an observation or executed an action.
 
 ## Proven live-capture baseline
 
@@ -58,9 +61,25 @@ The dedicated local EditGPT Eyes MCP is working end-to-end. The development serv
 
 A local MCP client successfully discovered all seven tools, started capture, read status, retrieved a real JPEG frame, and stopped capture. The MCP uses the official MCP Python SDK v2. Do not expose this development server publicly without adding the protected transport/authentication layer first.
 
+## Hands v1
+
+Hands is intentionally a second MCP security boundary because it can modify the desktop. Its local endpoint is `http://127.0.0.1:8766/mcp`.
+
+Current Hands contract:
+
+- starts **disarmed**;
+- defaults to `AfterFX.exe` only;
+- verifies the foreground process before every mouse/keyboard action;
+- can focus an allowlisted After Effects window;
+- supports move, click/double-click, scroll, keypress, Unicode text, drag, and wait;
+- accepts a compact computer-use-style action object so hosted or local controllers can share the same execution surface;
+- keeps screenshots and visual reasoning in Eyes.
+
+Hands v1 is now proven across its full input surface in reversible After Effects UI state. The paired controller bridge normalizes DPI to physical pixels, exposes Eyes encoded/capture geometry, safely maps model-visible coordinates to screen coordinates, fails closed when multi-monitor geometry is ambiguous, and uses local Qwen3-VL to ground visible UI targets. Live proofs now cover semantic move/click, keyboard Esc and Ctrl+A/Backspace, Unicode text entry, mouse-wheel scrolling with visual restoration, and drag/restore of the timeline current-time indicator.
+
 ## Semantic Eyes stage
 
-The next capability under test is local semantic sight.
+The next perception capability under test is local semantic sight.
 
 Detected workstation hardware:
 
@@ -85,9 +104,10 @@ That single launcher now:
 3. bootstraps dependencies and runs tests when the checked-out revision changes;
 4. installs/locates llama.cpp when semantic sight needs it;
 5. starts the local Eyes MCP if it is not already listening;
-6. starts the Qwen semantic server if it is not already ready;
-7. keeps both services in the background with persistent logs;
-8. preserves/reuses the current After Effects process rather than restarting it.
+6. starts the local Hands MCP if it is not already listening;
+7. starts the Qwen semantic server if it is not already ready;
+8. keeps the managed services in the background with persistent logs;
+9. preserves/reuses the current After Effects process rather than restarting it.
 
 The first Qwen launch may continue in the background while the official model and vision projector download/load. Check status with:
 
@@ -95,9 +115,16 @@ The first Qwen launch may continue in the background while the official model an
 .\editgpt.ps1 -Action status
 ```
 
-Run the current semantic proof with:
+Run the current proofs with:
 
 ```powershell
+.\editgpt.ps1 -Action proof-capture
+.\editgpt.ps1 -Action proof-mcp
+.\editgpt.ps1 -Action proof-hands
+.\editgpt.ps1 -Action proof-loop
+.\editgpt.ps1 -Action proof-semantic-pointer
+.\editgpt.ps1 -Action proof-semantic-click
+.\editgpt.ps1 -Action proof-hands-ui
 .\editgpt.ps1 -Action proof-semantic
 ```
 
@@ -105,9 +132,8 @@ Other useful commands:
 
 ```powershell
 .\editgpt.ps1 -Action doctor
-.\editgpt.ps1 -Action proof-capture
-.\editgpt.ps1 -Action proof-mcp
 .\editgpt.ps1 -Action logs -Service eyes_mcp
+.\editgpt.ps1 -Action logs -Service hands_mcp
 .\editgpt.ps1 -Action logs -Service semantic_qwen
 .\editgpt.ps1 -Action down
 ```
@@ -121,6 +147,7 @@ The orchestrator keeps its machine-specific state under `.editgpt/`, which is ig
 Current local endpoints:
 
 - Eyes MCP: `http://127.0.0.1:8765/mcp`
+- Hands MCP: `http://127.0.0.1:8766/mcp`
 - Qwen semantic server: `http://127.0.0.1:8080/v1`
 
 These are local development endpoints only. A protected ChatGPT-facing route is a separate future architecture checkpoint.
