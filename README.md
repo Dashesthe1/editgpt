@@ -81,7 +81,7 @@ Hands v1 is now proven across its full input surface in reversible After Effects
 
 The first generalized closed-loop controller is now implemented locally. It accepts a UI goal, re-observes After Effects, asks local Qwen3-VL for one constrained next action, grounds pointer targets separately, executes through Hands, and visually verifies the expected result before continuing. Pointer actions use a fresh grounding frame plus a target-patch freshness check so inference cannot silently act on materially changed UI evidence.
 
-The live controller proof completes an ordered File -> Edit menu task from visual state and action history rather than a fixed macro. It also demonstrated recovery: when one Edit click did not produce the expected dropdown, the verifier rejected the result and the next loop re-observed and retried before declaring completion. See `docs/CONTROLLER_V1.md`.
+The live controller proof completes an ordered File -> Edit menu task from visual state and action history rather than a fixed macro. It also demonstrated recovery: when one Edit click did not produce the expected dropdown, the verifier rejected the result and the next loop re-observed and retried before declaring completion. Controller v1 now also plans and executes semantically grounded reversible drags: a live proof moved the timeline playhead from 00s to 02s, verified the result visually, and then restored the playhead. See `docs/CONTROLLER_V1.md`.
 
 ## Semantic Eyes stage
 
@@ -132,6 +132,7 @@ Run the current proofs with:
 .\editgpt.ps1 -Action proof-semantic-click
 .\editgpt.ps1 -Action proof-hands-ui
 .\editgpt.ps1 -Action proof-controller
+.\editgpt.ps1 -Action proof-drag
 .\editgpt.ps1 -Action proof-semantic
 ```
 

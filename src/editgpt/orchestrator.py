@@ -228,6 +228,7 @@ class EditGPTOrchestrator:
             "semantic-click": self.root / "scripts" / "prove_semantic_click.py",
             "hands-ui": self.root / "scripts" / "prove_hands_ui.py",
             "controller": self.root / "scripts" / "prove_controller.py",
+            "drag": self.root / "scripts" / "prove_drag.py",
             "semantic": self.root / "scripts" / "prove_semantic.py",
         }
         if name not in scripts:
@@ -248,7 +249,7 @@ class EditGPTOrchestrator:
                 if not start.get("ok"):
                     print(json.dumps(start, indent=2))
                     return 6
-        elif name in {"semantic-pointer", "semantic-click", "hands-ui", "controller"}:
+        elif name in {"semantic-pointer", "semantic-click", "hands-ui", "controller", "drag"}:
             for start in (self.start_eyes_mcp(), self.start_hands_mcp(), self.start_semantic_qwen()):
                 if not start.get("ok"):
                     print(json.dumps(start, indent=2))
@@ -498,7 +499,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="run tests/environment checks and print status")
 
     proof = sub.add_parser("proof", help="run one current proof")
-    proof.add_argument("name", choices=("capture", "mcp", "hands", "loop", "semantic-pointer", "semantic-click", "hands-ui", "controller", "semantic"))
+    proof.add_argument("name", choices=("capture", "mcp", "hands", "loop", "semantic-pointer", "semantic-click", "hands-ui", "controller", "drag", "semantic"))
 
     logs = sub.add_parser("logs", help="show the tail of a managed service log")
     logs.add_argument("service", choices=("eyes_mcp", "hands_mcp", "semantic_qwen"))

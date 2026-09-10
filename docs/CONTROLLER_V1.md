@@ -61,8 +61,9 @@ The first generalized planner can choose:
 - keypress
 - type
 - wait
+- drag
 
-Hands already supports drag. Generalized semantic drag planning will be added after source/destination grounding has its own proof contract rather than allowing an unconstrained model-generated path.
+Drag is now grounded as two independent semantic targets (source and destination) from the same Eyes frame, converted through the physical-pixel coordinate bridge, and executed as a smooth Hands path. In safe mode, drag is limited to reversible UI-state targets such as the playhead/current-time indicator, scrollbars, and panel dividers.
 
 ## Live proof
 
@@ -88,6 +89,10 @@ Run it with:
 .\editgpt.ps1 -Action proof-controller
 ```
 
+## Reversible drag proof
+
+The controller has now independently planned a drag from the timeline start to the 02s ruler mark, grounded the live playhead and destination separately, executed the path through Hands, and verified the playhead at 02s from a fresh Eyes frame. A dedicated `proof-drag` also restores the playhead after validation.
+
 ## Next milestone
 
-Controller v1 is still a GUI-control foundation, not yet a professional autonomous editor. The next work is to add structured editing-task state, semantic drag source/destination grounding, richer keyboard shortcut coverage, and action policies that distinguish reversible UI navigation from intentional project mutations.
+Controller v1 is still a GUI-control foundation, not yet a professional autonomous editor. The next work is structured editing-task state and action policies that distinguish reversible UI navigation from intentional project mutations. Hands now includes common OEM punctuation keys used by After Effects shortcuts, so later task policies can expose only the specific shortcut families each editing operation needs.

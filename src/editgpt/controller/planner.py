@@ -16,6 +16,7 @@ _ALLOWED_ACTIONS = {
     "keypress",
     "type",
     "wait",
+    "drag",
 }
 _SAFE_TARGET_BLOCKLIST = (
     "save",
@@ -40,6 +41,7 @@ class PlannedAction:
     scroll_x: int = 0
     scroll_y: int = 0
     wait_s: float = 0.25
+    destination: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -51,6 +53,8 @@ class PlannedAction:
         if status not in {"act", "done", "blocked"}:
             raise ValueError("planner status must be act, done, or blocked")
 
+        if "confidence" not in payload and status == "act":
+            raise ValueError("planner act response requires confidence")
         confidence = float(payload.get("confidence", 0.0))
         if not 0.0 <= confidence <= 1.0:
             raise ValueError("planner confidence must be between 0 and 1")
@@ -73,12 +77,20 @@ class PlannedAction:
             raise ValueError(f"unsupported planned action: {action!r}")
         target_value = payload.get("target")
         target = str(target_value).strip() if target_value is not None else None
-        if action in {"click", "double_click", "move", "scroll"} and not target:
+        if action in {"click", "double_click", "move", "scroll", "drag"} and not target:
             raise ValueError(f"planned {action} requires a visible target description")
+        destination_value = payload.get("destination")
+        destination = str(destination_value).strip() if destination_value is not None else None
+        if action == "drag" and not destination:
+            raise ValueError("planned drag requires a visible destination description")
         if safe_mode and target:
             lowered = target.lower()
             if any(term in lowered for term in _SAFE_TARGET_BLOCKLIST):
                 raise PermissionError(f"safe controller mode rejected target: {target!r}")
+        if safe_mode and action == "drag":
+            allowed_drag_terms = ("playhead", "current-time indicator", "scrollbar", "scroll bar", "panel divider", "panel splitter")
+            if not any(term in (target or "").lower() for term in allowed_drag_terms):
+                raise PermissionError("safe controller mode only permits reversible UI-state drags")
         if safe_mode and action == "double_click":
             raise PermissionError("safe controller mode does not allow double-click")
 
@@ -124,6 +136,7 @@ class PlannedAction:
             scroll_x=scroll_x,
             scroll_y=scroll_y,
             wait_s=wait_s,
+            destination=destination,
         )
 
 
@@ -185,8 +198,9 @@ Recent history JSON: {history_text}
 
 Choose exactly one next step. Return ONLY JSON with these keys:
 status: "act", "done", or "blocked"
-action: one of "click", "double_click", "move", "scroll", "keypress", "type", "wait", or null
-target: a precise visible UI target description for pointer/scroll actions, otherwise null
+action: one of "click", "double_click", "move", "scroll", "drag", "keypress", "type", "wait", or null
+target: a precise visible UI target description for pointer/scroll/drag source actions, otherwise null
+destination: a precise visible UI destination description for drag, otherwise null
 keys: array of key names for keypress, otherwise []
 text: string for type, otherwise null
 scroll_x, scroll_y: integer pixel-style wheel deltas, each within -600..600
@@ -210,10 +224,21 @@ Rules:
         max_width=image.shape[1],
         jpeg_quality=92,
     )
-    plan = PlannedAction.from_json_text(observation.text, safe_mode=safe_mode)
-    if plan.confidence < min_confidence and plan.status != "blocked":
+    try:
+        plan = PlannedAction.from_json_text(observation.text, safe_mode=safe_mode)
+    except (ValueError, PermissionError, json.JSONDecodeError) as exc:
+        repair_prompt = prompt + "\nYour previous response was invalid: " + str(exc) + (
+            "\nPrevious response: " + observation.text +
+            "\nReturn one corrected JSON object only. For status=act, expected is REQUIRED and must describe an immediately visible post-action state."
+        )
+        observation = client.observe(
+            image, prompt=repair_prompt, source="live_controller_planner_repair",
+            max_tokens=300, max_width=image.shape[1], jpeg_quality=92,
+        )
+        plan = PlannedAction.from_json_text(observation.text, safe_mode=safe_mode)
+    if plan.confidence < min_confidence and plan.status == "act":
         raise ValueError(
-            f"planner confidence {plan.confidence:.2f} is below required {min_confidence:.2f}"
+            f"planner confidence {plan.confidence:.2f} is below required {min_confidence:.2f}; response={observation.text}"
         )
     return plan, observation
 

@@ -128,8 +128,9 @@ class LiveController:
             raise ValueError("cannot execute a plan without an action")
         target_record: dict[str, Any] | None = None
         screen_target: tuple[int, int] | None = None
+        screen_destination: tuple[int, int] | None = None
 
-        if action_type in {"click", "double_click", "move", "scroll"}:
+        if action_type in {"click", "double_click", "move", "scroll", "drag"}:
             assert plan.target is not None
             ground_meta, ground_image = await self._capture_after_effects(eyes, hands)
             target, observation = choose_pointer_target(
@@ -138,6 +139,16 @@ class LiveController:
                 client=self.qwen,
                 min_confidence=0.60,
             )
+            destination = None
+            destination_observation = None
+            if action_type == "drag":
+                assert plan.destination is not None
+                destination, destination_observation = choose_pointer_target(
+                    ground_image,
+                    instruction=f"Point to this exact visible After Effects drag destination: {plan.destination}",
+                    client=self.qwen,
+                    min_confidence=0.60,
+                )
             if not await self._foreground_is_after_effects(hands):
                 raise StaleObservationError("After Effects lost foreground during target grounding")
             latest_result = await eyes.call_tool(
@@ -158,13 +169,18 @@ class LiveController:
             hands_status = _structured(await hands.call_tool("hands_status", {}))
             transform = CoordinateTransform.from_status(action_meta, hands_status)
             screen_target = transform.encoded_to_screen(target.x, target.y)
+            if destination is not None:
+                screen_destination = transform.encoded_to_screen(destination.x, destination.y)
             target_record = {
                 "semantic_target": target.__dict__,
                 "grounding": observation.as_dict(),
+                "semantic_destination": None if destination is None else destination.__dict__,
+                "destination_grounding": None if destination_observation is None else destination_observation.as_dict(),
                 "grounded_frame_id": ground_meta.get("frame_id"),
                 "action_frame_id": action_meta.get("frame_id"),
                 "target_patch_changed_fraction": patch_change,
                 "screen": {"x": screen_target[0], "y": screen_target[1]},
+                "screen_destination": None if screen_destination is None else {"x": screen_destination[0], "y": screen_destination[1]},
             }
 
         if action_type in {"click", "double_click"}:
@@ -193,6 +209,18 @@ class LiveController:
                     "x": screen_target[0],
                     "y": screen_target[1],
                 },
+            )
+        elif action_type == "drag":
+            assert screen_target is not None and screen_destination is not None
+            x1, y1 = screen_target
+            x2, y2 = screen_destination
+            path = [
+                {"x": round(x1 + (x2 - x1) * i / 8), "y": round(y1 + (y2 - y1) * i / 8)}
+                for i in range(9)
+            ]
+            result = await hands.call_tool(
+                "hands_computer_action",
+                {"action": {"type": "drag", "button": "left", "path": path}},
             )
         elif action_type == "keypress":
             result = await hands.call_tool("hands_keypress", {"keys": list(plan.keys)})
