@@ -28,7 +28,7 @@ MOUSEEVENTF_RIGHTUP = 0x0010
 MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
 MOUSEEVENTF_WHEEL = 0x0800
-MOUSEEVENTF_HWHEEL = 0x01000
+MOUSEEVENTF_HWHEEL = 0x1000
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 SW_RESTORE = 9
 SM_XVIRTUALSCREEN = 76
@@ -192,7 +192,7 @@ class WindowsInputBackend:
         hwnd = int(target["hwnd"])
         user32.ShowWindow(hwnd, SW_RESTORE)
         if not user32.SetForegroundWindow(hwnd):
-            raise ctypes.WinError(ctypes.get_last_error())
+            raise RuntimeError(f"Windows refused to foreground {process_name!r}")
         time.sleep(0.05)
         return self._window_info(hwnd)
 
@@ -308,38 +308,35 @@ class WindowsInputBackend:
             )
 
     def _send_mouse(self, flags: int, *, mouse_data: int = 0) -> None:
-        event = INPUT(
-            type=INPUT_MOUSE,
-            mi=MOUSEINPUT(
-                dx=0,
-                dy=0,
-                mouseData=mouse_data & 0xFFFFFFFF,
-                dwFlags=flags,
-                time=0,
-                dwExtraInfo=0,
-            ),
+        event = INPUT()
+        event.type = INPUT_MOUSE
+        event.mi = MOUSEINPUT(
+            dx=0,
+            dy=0,
+            mouseData=mouse_data & 0xFFFFFFFF,
+            dwFlags=flags,
+            time=0,
+            dwExtraInfo=0,
         )
         self._send_input(event)
 
     def _send_key(self, virtual_key: int, *, key_up: bool) -> None:
-        event = INPUT(
-            type=INPUT_KEYBOARD,
-            ki=KEYBDINPUT(
-                wVk=virtual_key,
-                wScan=0,
-                dwFlags=KEYEVENTF_KEYUP if key_up else 0,
-                time=0,
-                dwExtraInfo=0,
-            ),
+        event = INPUT()
+        event.type = INPUT_KEYBOARD
+        event.ki = KEYBDINPUT(
+            wVk=virtual_key,
+            wScan=0,
+            dwFlags=KEYEVENTF_KEYUP if key_up else 0,
+            time=0,
+            dwExtraInfo=0,
         )
         self._send_input(event)
 
     def _send_unicode(self, unit: int, *, key_up: bool) -> None:
         flags = KEYEVENTF_UNICODE | (KEYEVENTF_KEYUP if key_up else 0)
-        event = INPUT(
-            type=INPUT_KEYBOARD,
-            ki=KEYBDINPUT(wVk=0, wScan=unit, dwFlags=flags, time=0, dwExtraInfo=0),
-        )
+        event = INPUT()
+        event.type = INPUT_KEYBOARD
+        event.ki = KEYBDINPUT(wVk=0, wScan=unit, dwFlags=flags, time=0, dwExtraInfo=0)
         self._send_input(event)
 
     def _send_input(self, event: INPUT) -> None:
