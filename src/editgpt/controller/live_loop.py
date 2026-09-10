@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from mcp import Client
 
+from editgpt.controller.ae_commands import get_ae_command
 from editgpt.controller.coordinates import CoordinateTransform
 from editgpt.controller.edit_task import EditingTaskContract, ScopeDecision, verify_rollback
 from editgpt.controller.planner import PlannedAction, choose_next_action, verify_visible_state
@@ -103,8 +104,6 @@ class LiveController:
         self.hands_url = hands_url
         self.qwen = qwen or LocalQwenVLClient()
         self.editing_task = editing_task
-        # An explicit task contract is the authority to leave UI-only planner mode.
-        # Merely passing safe_mode=False no longer grants project-mutation authority.
         self.safe_mode = False if editing_task is not None else safe_mode
         self.max_steps = max_steps
         self.policy = policy or (
@@ -123,6 +122,37 @@ class LiveController:
         if frame_result.is_error:
             raise RuntimeError(f"Eyes capture failed: {frame_result.content}")
         return _frame_parts(frame_result)
+
+    async def _execute_registered_command(self, plan: PlannedAction, hands) -> dict[str, Any]:
+        if not plan.command:
+            raise ValueError("ae_command action is missing its command key")
+        recipe = get_ae_command(plan.command)
+        step_results: list[dict[str, Any]] = []
+        for index, step in enumerate(recipe.steps):
+            if step.action == "keypress":
+                result = await hands.call_tool("hands_keypress", {"keys": list(step.keys)})
+            elif step.action == "type":
+                result = await hands.call_tool("hands_type_text", {"text": step.text or ""})
+            elif step.action == "wait":
+                await asyncio.sleep(step.wait_s)
+                result = None
+            else:
+                raise ValueError(f"unsupported AE command step: {step.action}")
+            if result is not None and result.is_error:
+                raise RuntimeError(
+                    f"registered AE command {recipe.key!r} failed at step {index + 1}: {result.content}"
+                )
+            step_results.append({
+                "index": index + 1,
+                "step": step.as_dict(),
+                "hands_result": None if result is None else _structured(result),
+            })
+            if index + 1 < len(recipe.steps):
+                await asyncio.sleep(0.06)
+        return {
+            "command": recipe.as_dict(),
+            "steps": step_results,
+        }
 
     async def _execute_plan(
         self,
@@ -193,6 +223,8 @@ class LiveController:
                 "screen_destination": None if screen_destination is None else {"x": screen_destination[0], "y": screen_destination[1]},
             }
 
+        command_result: dict[str, Any] | None = None
+        result = None
         if action_type in {"click", "double_click"}:
             assert screen_target is not None
             result = await hands.call_tool(
@@ -238,8 +270,9 @@ class LiveController:
             result = await hands.call_tool("hands_type_text", {"text": plan.text or ""})
         elif action_type == "wait":
             await asyncio.sleep(plan.wait_s)
-            result = None
-        else:  # guarded by PlannedAction validation
+        elif action_type == "ae_command":
+            command_result = await self._execute_registered_command(plan, hands)
+        else:
             raise ValueError(f"unsupported plan action: {action_type}")
 
         if result is not None and result.is_error:
@@ -247,6 +280,7 @@ class LiveController:
         return {
             "action_type": action_type,
             "targeting": target_record,
+            "command_result": command_result,
             "hands_result": None if result is None else _structured(result),
         }
 
