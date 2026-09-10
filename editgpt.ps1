@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-drag", "proof-m4", "proof-semantic", "logs")]
+    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-drag", "proof-m4", "proof-semantic", "proof-m5-source-temporal", "logs")]
     [string]$Action = "up",
     [ValidateSet("eyes_mcp", "hands_mcp", "semantic_qwen")]
     [string]$Service = "eyes_mcp",
@@ -176,6 +176,9 @@ switch ($Action) {
     }
     "proof-semantic" {
         Invoke-Checked { & $ControlExe proof semantic } "Semantic proof failed."
+    }
+    "proof-m5-source-temporal" {
+        Invoke-Checked { & $ControlExe proof m5-source-temporal } "M5 source temporal proof failed."
     }
     "logs" {
         Invoke-Checked { & $ControlExe logs $Service } "Unable to read EditGPT service log."

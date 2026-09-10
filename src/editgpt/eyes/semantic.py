@@ -111,37 +111,53 @@ class LocalQwenVLClient:
             "server_models": body.get("data", []),
         }
 
-    def observe(
+    def observe_images(
         self,
-        image: np.ndarray,
+        images: list[np.ndarray],
         *,
         prompt: str,
-        source: str = "live_frame",
-        max_tokens: int = 320,
-        max_width: int = 1280,
-        jpeg_quality: int = 90,
+        labels: list[str] | None = None,
+        source: str = "frame_sequence",
+        max_tokens: int = 480,
+        max_width: int = 960,
+        jpeg_quality: int = 88,
     ) -> SemanticObservation:
         if not prompt.strip():
             raise ValueError("prompt must not be empty")
+        if not images:
+            raise ValueError("at least one image is required")
+        if len(images) > 12:
+            raise ValueError("at most 12 images may be sent in one semantic observation")
+        if labels is not None and len(labels) != len(images):
+            raise ValueError("labels must match the number of images")
         if max_tokens <= 0:
             raise ValueError("max_tokens must be positive")
 
-        image_url = encode_jpeg_data_url(
-            image,
-            max_width=max_width,
-            quality=jpeg_quality,
-        )
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for offset, image in enumerate(images):
+            if labels is not None:
+                content.append(
+                    {
+                        "type": "text",
+                        "text": f"Frame {offset + 1}: {labels[offset]}",
+                    }
+                )
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": encode_jpeg_data_url(
+                            image,
+                            max_width=max_width,
+                            quality=jpeg_quality,
+                        )
+                    },
+                }
+            )
+
         body = {
             "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt},
-                        {"type": "image_url", "image_url": {"url": image_url}},
-                    ],
-                }
-            ],
+            "messages": [{"role": "user", "content": content}],
             "temperature": 0.0,
             "max_tokens": max_tokens,
         }
@@ -158,7 +174,9 @@ class LocalQwenVLClient:
                 payload = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"local Qwen server returned HTTP {exc.code}: {detail}") from exc
+            raise RuntimeError(
+                f"local Qwen server returned HTTP {exc.code}: {detail}"
+            ) from exc
         except (OSError, urllib.error.URLError) as exc:
             raise RuntimeError(
                 f"cannot reach local Qwen server at {self.base_url}; start llama.cpp first"
@@ -176,4 +194,23 @@ class LocalQwenVLClient:
             text=str(text).strip(),
             latency_s=time.perf_counter() - started,
             source=source,
+        )
+
+    def observe(
+        self,
+        image: np.ndarray,
+        *,
+        prompt: str,
+        source: str = "live_frame",
+        max_tokens: int = 320,
+        max_width: int = 1280,
+        jpeg_quality: int = 90,
+    ) -> SemanticObservation:
+        return self.observe_images(
+            [image],
+            prompt=prompt,
+            source=source,
+            max_tokens=max_tokens,
+            max_width=max_width,
+            jpeg_quality=jpeg_quality,
         )

@@ -230,6 +230,7 @@ class EditGPTOrchestrator:
             "controller": self.root / "scripts" / "prove_controller.py",
             "drag": self.root / "scripts" / "prove_drag.py",
             "semantic": self.root / "scripts" / "prove_semantic.py",
+            "m5-source-temporal": self.root / "scripts" / "prove_m5_source_temporal.py",
         }
         if name not in scripts:
             raise ValueError(f"unknown proof: {name}")
@@ -256,7 +257,7 @@ class EditGPTOrchestrator:
                     return 7
             if not self.wait_for_semantic():
                 return 8
-        elif name == "semantic":
+        elif name in {"semantic", "m5-source-temporal"}:
             start = self.start_semantic_qwen()
             if not start.get("ok"):
                 print(json.dumps(start, indent=2))
@@ -499,7 +500,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="run tests/environment checks and print status")
 
     proof = sub.add_parser("proof", help="run one current proof")
-    proof.add_argument("name", choices=("capture", "mcp", "hands", "loop", "semantic-pointer", "semantic-click", "hands-ui", "controller", "drag", "semantic"))
+    proof.add_argument("name", choices=("capture", "mcp", "hands", "loop", "semantic-pointer", "semantic-click", "hands-ui", "controller", "drag", "semantic", "m5-source-temporal"))
 
     logs = sub.add_parser("logs", help="show the tail of a managed service log")
     logs.add_argument("service", choices=("eyes_mcp", "hands_mcp", "semantic_qwen"))

@@ -7,8 +7,10 @@ from typing import Any
 import numpy as np
 
 from .eyes.runtime import LiveEyesRuntime
+from .eyes.source import SourceCatalog
 
 _RUNTIME = LiveEyesRuntime(buffer_capacity=30)
+_SOURCES = SourceCatalog()
 
 
 def _require_cv2():
@@ -179,6 +181,88 @@ def build_server():
             later_frame_id,
             pixel_threshold=pixel_threshold,
         )
+
+
+    @mcp.tool()
+    def eyes_source_health() -> dict[str, Any]:
+        """Return read-only source-video decoder health and open-source state."""
+        return _SOURCES.health()
+
+    @mcp.tool()
+    def eyes_source_open(
+        path: str,
+        prefer_gpu: bool = True,
+        gpu_id: int = 0,
+    ) -> dict[str, Any]:
+        """Open a local video source for exact read-only frame evidence."""
+        source_id, metadata = _SOURCES.open(path, prefer_gpu=prefer_gpu, gpu_id=gpu_id)
+        return {"source_id": source_id, "metadata": metadata.as_dict()}
+
+
+    @mcp.tool()
+    def eyes_source_info(source_id: str) -> dict[str, Any]:
+        """Return metadata for an already opened source video."""
+        return {"source_id": source_id, "metadata": _SOURCES.get(source_id).metadata.as_dict()}
+
+    @mcp.tool(structured_output=False)
+    def eyes_source_frame(
+        source_id: str,
+        index: int,
+        max_width: int = 1280,
+        jpeg_quality: int = 90,
+    ) -> list[Any]:
+        """Return one exact source-video frame by decode-order index."""
+        frame = _SOURCES.get(source_id).read_frame(index)
+        metadata = _frame_metadata(frame, max_width=max_width)
+        metadata["source_id"] = source_id
+        return [
+            json.dumps(metadata, separators=(",", ":")),
+            Image(data=_encode_jpeg(frame.image, max_width=max_width, quality=jpeg_quality), format="jpeg"),
+        ]
+
+
+    @mcp.tool(structured_output=False)
+    def eyes_source_frames(
+        source_id: str,
+        indices: list[int],
+        max_width: int = 960,
+        jpeg_quality: int = 86,
+    ) -> list[Any]:
+        """Return up to 12 exact source frames in caller-specified order."""
+        if not indices or len(indices) > 12:
+            raise ValueError("indices must contain between 1 and 12 frame indices")
+        frames = _SOURCES.get(source_id).read_frames(indices)
+        content: list[Any] = []
+        for frame in frames:
+            metadata = _frame_metadata(frame, max_width=max_width)
+            metadata["source_id"] = source_id
+            content.append(json.dumps(metadata, separators=(",", ":")))
+            content.append(
+                Image(
+                    data=_encode_jpeg(frame.image, max_width=max_width, quality=jpeg_quality),
+                    format="jpeg",
+                )
+            )
+        return content
+
+
+    @mcp.tool()
+    def eyes_source_index_at_time(source_id: str, seconds: float) -> dict[str, Any]:
+        """Map source-media seconds to the first presented decode-order frame at/after that time."""
+        reader = _SOURCES.get(source_id)
+        index = reader.index_at_seconds(seconds)
+        frame = reader.read_frame(index)
+        return {
+            "source_id": source_id,
+            "requested_seconds": float(seconds),
+            "frame_index": index,
+            "source_time_s": frame.metadata.get("source_time_s"),
+        }
+
+    @mcp.tool()
+    def eyes_source_close(source_id: str) -> dict[str, Any]:
+        """Close one opened source-video reader without modifying the media."""
+        return {"source_id": source_id, "closed": _SOURCES.close(source_id)}
 
     return mcp
 
