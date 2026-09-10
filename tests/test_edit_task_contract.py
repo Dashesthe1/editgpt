@@ -103,6 +103,12 @@ def test_project_control_navigation_does_not_consume_mutation_scope() -> None:
         "Scale value field for hero layer",
         "Scale value field is focused",
     )
+    reveal_scale = _plan(
+        "keypress",
+        None,
+        "Scale property is visible for the selected hero layer",
+        keys=("S",),
+    )
     actual_write = _plan(
         "type",
         None,
@@ -111,7 +117,17 @@ def test_project_control_navigation_does_not_consume_mutation_scope() -> None:
     )
     assert classify_action_impact(select_layer) == "reversible_ui"
     assert classify_action_impact(focus_scale) == "reversible_ui"
+    assert classify_action_impact(reveal_scale) == "reversible_ui"
     assert classify_action_impact(actual_write) == "project_mutation"
+
+
+def test_save_export_render_are_outside_m4_transactions() -> None:
+    save = _plan("keypress", None, "project is saved", keys=("CTRL", "S"))
+    export = _plan("click", "Export menu item", "export dialog is visible")
+    render = _plan("click", "Add to Render Queue menu item", "render queue is visible")
+    assert classify_action_impact(save) == "destructive"
+    assert classify_action_impact(export) == "destructive"
+    assert classify_action_impact(render) == "destructive"
 
 
 def test_undo_and_redo_are_reserved_for_controller_transaction_path() -> None:
