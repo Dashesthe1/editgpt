@@ -40,6 +40,7 @@ From the repository root on Windows:
 .\editgpt.ps1 -Action proof-semantic-click
 .\editgpt.ps1 -Action proof-hands-ui
 .\editgpt.ps1 -Action proof-controller
+.\editgpt.ps1 -Action proof-drag
 .\editgpt.ps1 -Action proof-semantic
 
 # Read service logs
