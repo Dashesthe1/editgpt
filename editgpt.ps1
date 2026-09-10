@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-semantic", "logs")]
+    [ValidateSet("up", "status", "down", "doctor", "proof-capture", "proof-mcp", "proof-hands", "proof-loop", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller", "proof-semantic", "logs")]
     [string]$Action = "up",
     [ValidateSet("eyes_mcp", "hands_mcp", "semantic_qwen")]
     [string]$Service = "eyes_mcp",
@@ -83,7 +83,7 @@ if ($needsBootstrap) {
     Write-Host "Environment already validated for commit $($currentCommit.Substring(0, 8))."
 }
 
-$needsSemantic = (-not $NoSemantic) -and ($Action -in @("up", "proof-semantic", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui"))
+$needsSemantic = (-not $NoSemantic) -and ($Action -in @("up", "proof-semantic", "proof-semantic-pointer", "proof-semantic-click", "proof-hands-ui", "proof-controller"))
 if ($needsSemantic -and -not (Test-LlamaRuntime)) {
     Write-Host "Semantic runtime is missing; installing/locating llama.cpp automatically..."
     Invoke-Checked {
@@ -134,6 +134,9 @@ switch ($Action) {
     }
     "proof-hands-ui" {
         Invoke-Checked { & $ControlExe proof hands-ui } "Hands UI interaction proof failed."
+    }
+    "proof-controller" {
+        Invoke-Checked { & $ControlExe proof controller } "Closed-loop controller proof failed."
     }
     "proof-semantic" {
         Invoke-Checked { & $ControlExe proof semantic } "Semantic proof failed."

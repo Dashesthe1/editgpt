@@ -86,11 +86,11 @@ If the target is not clearly visible, set confidence below 0.55.
         return target, observation
 
     # Qwen grounding boxes can include a little vertical UI padding. Use a
-    # conservative interior click point rather than a second VLM crop pass, which
+    # conservative upper-interior click point rather than a second VLM crop pass, which
     # proved less stable on tiny AE menu labels. This remains inside the box.
     x1, y1, x2, y2 = target.bbox_pixels
     click_x = int(round((x1 + x2) / 2.0))
-    click_y = int(round(y1 + (y2 - y1) * 0.40))
+    click_y = min(y2 - 1, y1 + 2) if y2 <= height * 0.15 else int(round(y1 + (y2 - y1) * 0.40))
     result = SemanticPointerTarget(
         x=click_x,
         y=click_y,
