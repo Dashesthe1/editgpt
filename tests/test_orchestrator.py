@@ -79,3 +79,11 @@ def test_cli_accepts_controller_proof() -> None:
     args = build_parser().parse_args(["proof", "controller"])
     assert args.command == "proof"
     assert args.name == "controller"
+
+
+def test_cli_accepts_m5_source_temporal_proof() -> None:
+    from editgpt.orchestrator import build_parser
+
+    args = build_parser().parse_args(["proof", "m5-source-temporal"])
+    assert args.command == "proof"
+    assert args.name == "m5-source-temporal"

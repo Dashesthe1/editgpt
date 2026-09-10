@@ -2,7 +2,7 @@
 
 EditGPT is a new project for building GPT into a professional After Effects editor by giving it human-like senses and control while retaining machine-precision tools.
 
-## Current milestone: M4 scoped transactional editing
+## Current milestone: M5 source + temporal Eyes
 
 Eyes remains the first and highest-priority perception subsystem. The goal is not "periodic screenshots"; it is a complete visual service that lets GPT request reliable evidence about live After Effects playback and exact source footage.
 
@@ -116,6 +116,18 @@ M4 now has a dedicated rollback-first real-AE proof at `scripts/prove_m4_transac
 The gate uses the registered native `layer.new.null` command as a bounded `layer_structure` mutation. It first forces visual verification failure and requires the controller-owned Undo path to restore the baseline. Only after that rollback succeeds does it prove a committed mutation, then clean up that committed proof mutation and verify the final visible state against the original baseline. The proof also requires the same `AfterFX.exe` process ID at the beginning and end.
 
 M4 is not considered complete until the live proof writes `artifacts/m4-live-proof/proof.json` with `ok: true`. The software path and PowerShell entrypoint are covered by Windows CI; the real workstation execution is a separate gate.
+
+## M5 source + temporal Eyes
+
+M5 adds exact read-only source-video evidence independently of After Effects preview scaling. eyes_source_open, eyes_source_frame, eyes_source_frames, eyes_source_index_at_time, and related health/info/close operations expose exact decoded frames through the existing Eyes MCP. PyNvVideoCodec is preferred when its NVIDIA/CUDA runtime is healthy; PyAV is the compatibility fallback and preserves decoded-frame PTS for variable-frame-rate timing.
+
+LocalQwenVLClient.observe_images(...) now accepts bounded, labeled chronological frame sequences so GPT can reason about visible temporal changes without continuous VLM inference. The first M5 proof validates exact frame retrieval, source-time lookup, and ordered multi-frame semantic understanding:
+
+`powershell
+.\editgpt.ps1 -Action proof-m5-source-temporal
+`
+
+The current workstation passes the proof through PyAV. PyNvVideoCodec is installed but its DLL cannot load because the required CUDA Toolkit runtime is not installed, so GPU source decode remains an environment optimization to restore rather than a correctness dependency.
 
 ## Semantic Eyes stage
 

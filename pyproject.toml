@@ -16,6 +16,7 @@ dependencies = [
 capture = [
   "dxcam>=0.3.0",
   "opencv-python>=4.10",
+  "av>=18.1",
 ]
 mcp = [
   "mcp>=2,<3",

@@ -33,3 +33,9 @@ def test_powershell_entrypoint_parses_on_windows() -> None:
         check=False,
     )
     assert completed.returncode == 0, completed.stderr or completed.stdout
+
+
+def test_entrypoint_exposes_m5_source_temporal_proof() -> None:
+    text = ENTRYPOINT.read_text(encoding="utf-8")
+    assert '"proof-m5-source-temporal"' in text
+    assert "proof m5-source-temporal" in text
