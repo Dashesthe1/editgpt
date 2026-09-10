@@ -46,6 +46,7 @@ Before a pointer action:
 - Eyes geometry must remain unchanged between grounding and action.
 - The grounded target patch is re-observed after semantic inference; significant visual change makes the observation stale and no action is sent.
 - Low-confidence plans or targets fail closed.
+- A deterministic Task Policy independently authorizes the action impact before Hands execution; model planning cannot self-authorize project mutation.
 - Every planned action must state a visible expected result for post-action verification.
 
 The proof/default `safe_mode` adds another layer: destructive target descriptions are rejected, text entry and double-click are disabled, scroll magnitude is bounded, and the only keyboard action allowed is Escape.
@@ -92,6 +93,8 @@ Run it with:
 ## Reversible drag proof
 
 The controller has now independently planned a drag from the timeline start to the 02s ruler mark, grounded the live playhead and destination separately, executed the path through Hands, and verified the playhead at 02s from a fresh Eyes frame. A dedicated `proof-drag` also restores the playhead after validation.
+
+See `docs/TASK_POLICY_V1.md` for the action-impact authorization contract.
 
 ## Next milestone
 

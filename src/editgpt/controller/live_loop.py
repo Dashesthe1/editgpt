@@ -12,6 +12,7 @@ from mcp import Client
 
 from editgpt.controller.coordinates import CoordinateTransform
 from editgpt.controller.planner import PlannedAction, choose_next_action, verify_visible_state
+from editgpt.controller.policy import TaskPolicy
 from editgpt.controller.semantic_pointer import choose_pointer_target
 from editgpt.eyes.semantic import LocalQwenVLClient
 
@@ -92,6 +93,7 @@ class LiveController:
         qwen: LocalQwenVLClient | None = None,
         safe_mode: bool = True,
         max_steps: int = 6,
+        policy: TaskPolicy | None = None,
     ) -> None:
         if max_steps < 1 or max_steps > 12:
             raise ValueError("max_steps must be between 1 and 12")
@@ -100,6 +102,7 @@ class LiveController:
         self.qwen = qwen or LocalQwenVLClient()
         self.safe_mode = safe_mode
         self.max_steps = max_steps
+        self.policy = policy or (TaskPolicy.ui_proof() if safe_mode else TaskPolicy.editing())
 
     async def _capture_after_effects(self, eyes, hands) -> tuple[dict[str, Any], np.ndarray]:
         focused = await hands.call_tool("hands_focus_after_effects", {})
@@ -316,6 +319,21 @@ class LiveController:
                             )
                         continue
 
+                    policy_decision = self.policy.authorize(plan)
+                    if not policy_decision.allowed:
+                        history.append({
+                            "step": index + 1,
+                            "frame_id": frame_meta.get("frame_id"),
+                            "plan": plan.as_dict(),
+                            "planner": planner_observation.as_dict(),
+                            "policy": policy_decision.as_dict(),
+                            "verified": False,
+                            "verification_reason": policy_decision.reason,
+                        })
+                        return LiveControllerResult(
+                            False, "blocked", goal, tuple(history), final_frame_id, policy_decision.reason
+                        )
+
                     try:
                         execution = await self._execute_plan(
                             plan=plan,
@@ -330,6 +348,7 @@ class LiveController:
                             "frame_id": frame_meta.get("frame_id"),
                             "plan": plan.as_dict(),
                             "planner": planner_observation.as_dict(),
+                            "policy": policy_decision.as_dict(),
                             "stale_before_action": True,
                             "verified": False,
                             "verification_reason": str(exc),
@@ -370,6 +389,7 @@ class LiveController:
                             "frame_id": frame_meta.get("frame_id"),
                             "plan": plan.as_dict(),
                             "planner": planner_observation.as_dict(),
+                            "policy": policy_decision.as_dict(),
                             "execution": execution,
                             "post_frame_id": post_meta.get("frame_id"),
                             "verified": verified,
