@@ -33,6 +33,32 @@ Supported non-destructive mutation kinds are currently:
 
 A plan that semantically spans multiple mutation kinds must have every detected kind authorized. Destructive actions remain outside M4 even if an Undo path might exist.
 
+## AE Command Surface integration — M4
+
+M4 uses the same cross-milestone After Effects Command Surface as M1-M3. A native AE command is preferred over reproducing the same operation through a long mouse-navigation sequence, but native execution never grants extra authority.
+
+Every registered command declares its impact and, for project mutations, the exact semantic mutation kinds it can create. Examples:
+
+- `property.scale.reveal` — reversible UI; no mutation budget consumed;
+- `mask.new` — `project_mutation`, kind `mask`;
+- `layer.split` — `project_mutation`, kinds `layer_timing` + `layer_structure`;
+- `layer.time_remap.enable` — `project_mutation`, kinds `layer_timing` + `keyframe`;
+- `layer.fit.comp` — `project_mutation`, kind `transform`;
+- `layer.precompose` — `project_mutation`, kinds `composition` + `layer_structure`.
+
+A command spanning multiple mutation kinds requires the task contract to authorize **all** of them. Merely being registered or implemented by Adobe does not let it bypass policy, target scope, mutation budget, Eyes evidence, or rollback verification.
+
+The M4 command rule is therefore:
+
+1. prefer a registered AE-native operation when it performs the requested edit reliably;
+2. authorize it using registry-declared semantics rather than trying to infer mutation type from the physical key chord;
+3. capture fresh pre-mutation Eyes evidence;
+4. execute through guarded Hands;
+5. verify the visible result with fresh Eyes evidence;
+6. roll back through the transaction-owned Undo path if verification fails.
+
+See `docs/AE_COMMAND_SURFACE_V1.md` for the shared M1+ architecture.
+
 ## Two independent gates
 
 The model receives the task scope in its planning prompt so it has the information needed to choose a valid action. That prompt is guidance, not authority.
@@ -77,7 +103,7 @@ M4 history entries add:
 - deterministic rollback changed-fraction evidence;
 - the running committed-mutation count.
 
-A failed mutation cannot be reported as successful merely because the planner expected it to work.
+For registered AE commands, controller execution evidence also records the semantic command recipe and its deterministic Hands steps. A failed mutation cannot be reported as successful merely because the planner expected it to work.
 
 ## Example contract
 
@@ -101,7 +127,8 @@ The software gate is:
 2. allowed mutation kinds/targets pass;
 3. out-of-scope kinds/targets fail closed;
 4. mutation budgets are enforced;
-5. rollback image verification is deterministic;
-6. the Windows test suite passes.
+5. registered command mutations obey the same scope contract as pointer/typing mutations;
+6. rollback image verification is deterministic;
+7. the Windows test suite passes.
 
-The remaining live workstation gate is to perform a bounded real After Effects project mutation under a contract, prove a verified commit, deliberately exercise a failed verification path, prove `Ctrl+Z` restoration from fresh Eyes evidence, and leave the existing After Effects process running.
+The remaining live workstation gate is to perform a bounded real After Effects project mutation under a contract, preferably through a registered native AE command when appropriate, prove a verified commit, deliberately exercise a failed verification path, prove `Ctrl+Z` restoration from fresh Eyes evidence, and leave the existing After Effects process running.
