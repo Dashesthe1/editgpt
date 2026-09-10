@@ -512,7 +512,12 @@ def command_catalog(*, domain: str | None = None, impact: str | None = None) -> 
 
 
 def command_keys_for_goal(goal: str, *, limit: int = 32) -> tuple[str, ...]:
-    """Return a compact relevant subset so a larger command library does not slow the warm loop."""
+    """Return a compact relevant subset so a larger command library does not slow the warm loop.
+
+    Quick Apply is deliberately reserved as the universal AE-native fallback. The
+    remaining slots are filled by goal relevance first and common baseline commands
+    second, so registry growth cannot crowd out the fallback or linearly bloat prompts.
+    """
     if limit < 1:
         return ()
     tokens = {
@@ -528,12 +533,26 @@ def command_keys_for_goal(goal: str, *, limit: int = 32) -> tuple[str, ...]:
             scored.append((score, key))
     scored.sort(key=lambda item: (-item[0], item[1]))
 
-    ordered = [key for _, key in scored]
-    ordered.extend(_BASELINE_PLANNER_COMMANDS)
     result: list[str] = []
     seen: set[str] = set()
-    for key in ordered:
+
+    # Always retain the universal search doorway when at least one slot exists.
+    if "quick_apply.open" in AE_COMMANDS:
+        result.append("quick_apply.open")
+        seen.add("quick_apply.open")
+        if len(result) >= limit:
+            return tuple(result)
+
+    for _, key in scored:
         if key in seen:
+            continue
+        seen.add(key)
+        result.append(key)
+        if len(result) >= limit:
+            return tuple(result)
+
+    for key in _BASELINE_PLANNER_COMMANDS:
+        if key in seen or key not in AE_COMMANDS:
             continue
         seen.add(key)
         result.append(key)
