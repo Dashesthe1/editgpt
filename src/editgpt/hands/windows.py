@@ -129,7 +129,16 @@ class WindowsInputBackend:
         user32.GetCursorPos.restype = wintypes.BOOL
         user32.SetCursorPos.argtypes = (ctypes.c_int, ctypes.c_int)
         user32.SetCursorPos.restype = wintypes.BOOL
+        user32.GetForegroundWindow.argtypes = ()
         user32.GetForegroundWindow.restype = wintypes.HWND
+        user32.IsWindowVisible.argtypes = (wintypes.HWND,)
+        user32.IsWindowVisible.restype = wintypes.BOOL
+        user32.ShowWindow.argtypes = (wintypes.HWND, ctypes.c_int)
+        user32.ShowWindow.restype = wintypes.BOOL
+        user32.SetForegroundWindow.argtypes = (wintypes.HWND,)
+        user32.SetForegroundWindow.restype = wintypes.BOOL
+        user32.GetSystemMetrics.argtypes = (ctypes.c_int,)
+        user32.GetSystemMetrics.restype = ctypes.c_int
         user32.GetWindowTextLengthW.argtypes = (wintypes.HWND,)
         user32.GetWindowTextLengthW.restype = ctypes.c_int
         user32.GetWindowTextW.argtypes = (wintypes.HWND, wintypes.LPWSTR, ctypes.c_int)
