@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .ae_commands import get_ae_command
 from .planner import PlannedAction
 
 
@@ -29,7 +30,9 @@ REVERSIBLE_UI_EXPECTATION_TERMS = (
     "is expanded", "is collapsed", "dropdown is visible", "menu is open",
     "submenu is visible", "panel is active", "panel is focused",
     "property is visible", "property is revealed", "properties are visible",
-    "properties are revealed", "tool is active",
+    "properties are revealed", "tool is active", "search contains",
+    "search field contains", "search box contains", "query is visible",
+    "quick apply contains",
 )
 
 
@@ -79,6 +82,14 @@ def classify_action_impact(plan: PlannedAction) -> str:
         return "none"
 
     action = plan.action_type
+    if action == "ae_command":
+        if not plan.command:
+            return "ambiguous"
+        try:
+            return get_ae_command(plan.command).impact
+        except KeyError:
+            return "ambiguous"
+
     text = " ".join(filter(None, (plan.target, plan.destination, plan.expected))).lower()
     expected = plan.expected.lower()
     if any(term in text for term in DESTRUCTIVE_TERMS):
@@ -98,8 +109,6 @@ def classify_action_impact(plan: PlannedAction) -> str:
             return "reversible_ui"
         return "project_mutation"
     if action in {"click", "double_click"}:
-        # Clicking a project control can be UI-only when the expected state is
-        # explicitly selection/focus/disclosure rather than a value/content change.
         if any(term in expected for term in REVERSIBLE_UI_EXPECTATION_TERMS):
             return "reversible_ui"
         if any(term in text for term in PROJECT_MUTATION_TERMS):
@@ -108,5 +117,7 @@ def classify_action_impact(plan: PlannedAction) -> str:
             return "reversible_ui"
         return "ambiguous"
     if action == "type":
+        if any(term in expected for term in REVERSIBLE_UI_EXPECTATION_TERMS):
+            return "reversible_ui"
         return "project_mutation"
     return "ambiguous"
