@@ -30,9 +30,9 @@ def build_server():
         return _service().status()
 
     @mcp.tool()
-    def hands_arm(allowed_processes: list[str] | None = None) -> dict[str, Any]:
-        """Arm write-capable desktop input. Defaults to AfterFX.exe only."""
-        return _service().arm(allowed_processes)
+    def hands_arm() -> dict[str, Any]:
+        """Arm write-capable desktop input for the server-configured process allowlist."""
+        return _service().arm()
 
     @mcp.tool()
     def hands_disarm() -> dict[str, Any]:
