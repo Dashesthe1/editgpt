@@ -119,6 +119,40 @@ EditingTaskContract(
 
 The controller must be run with the exact same goal string bound into the contract. A mismatched goal is rejected before semantic planning begins.
 
+## M4 live proof harness
+
+`scripts/prove_m4_transaction.py` is the dedicated real-After-Effects M4 gate. It uses the registered native `layer.new.null` command because a new Null layer is visually obvious, bounded to `layer_structure`, and cleanly undoable.
+
+The harness intentionally runs the rollback proof **before** the commit proof:
+
+1. focus the already-running After Effects process, press Escape to settle preview/modal UI, and capture the initial Eyes baseline;
+2. semantically confirm that an active composition Timeline is visible before any mutation;
+3. execute one authorized `layer.new.null` mutation with an intentionally impossible visual expectation containing the unique `M4_ROLLBACK_SENTINEL_9F3A` title;
+4. require the normal M4 action verifier to reject that expectation and require the controller-owned `Ctrl+Z` path to report `transaction.state=rolled_back`;
+5. independently capture fresh Eyes evidence and compare it with the initial baseline;
+6. only after rollback is proven, execute a second bounded `layer.new.null` mutation with a truthful visible-state expectation and require `transaction.state=committed` plus final goal verification;
+7. capture the committed state and require a non-zero viewer-visible change from the restored baseline;
+8. issue one cleanup Undo for that intentionally committed proof mutation;
+9. capture final Eyes evidence, verify that it matches the initial baseline within rollback tolerance, and require the foreground `AfterFX.exe` process ID to be unchanged from start to finish.
+
+The proof never starts, stops, closes, or restarts After Effects. If rollback cannot be proven, it stops before running the commit case. If a committed proof mutation cannot be cleaned up safely, it reports failure rather than issuing additional blind Undo operations.
+
+Run the live gate from an already prepared EditGPT environment with:
+
+```powershell
+.\.venv\Scripts\python.exe .\scripts\prove_m4_transaction.py
+```
+
+Successful evidence is written to `artifacts/m4-live-proof/`:
+
+- `00_baseline.jpg`
+- `01_after_transaction_rollback.jpg`
+- `02_committed_null.jpg`
+- `03_final_cleanup.jpg`
+- `proof.json`
+
+`proof.json` is the authoritative machine-readable result. M4 is not considered live-proven unless all checks are true, including verified rollback, verified commit, visible commit change, baseline restoration after cleanup, and reuse of the same After Effects process.
+
 ## M4 proof gate
 
 The software gate is:
@@ -131,4 +165,4 @@ The software gate is:
 6. rollback image verification is deterministic;
 7. the Windows test suite passes.
 
-The remaining live workstation gate is to perform a bounded real After Effects project mutation under a contract, preferably through a registered native AE command when appropriate, prove a verified commit, deliberately exercise a failed verification path, prove `Ctrl+Z` restoration from fresh Eyes evidence, and leave the existing After Effects process running.
+The remaining live workstation gate is to run `scripts/prove_m4_transaction.py` against the existing After Effects process and obtain `ok: true` in `artifacts/m4-live-proof/proof.json`. That single proof must demonstrate a bounded real AE mutation, a verified commit, a deliberately failed visual verification, verified controller-owned `Ctrl+Z` restoration, proof cleanup back to the initial visible state, and reuse of the same After Effects process.
