@@ -14,25 +14,30 @@ goal
   v
 focus AE -> Eyes frame -> Qwen next-action plan
                            |
-                           v
-                     fresh AE frame
-                           |
-                           v
-                    Qwen target grounding
-                           |
-                           v
-                    freshness + geometry guard
-                           |
-                           v
-                        Hands action
-                           |
-                           v
-                       Eyes frame
-                           |
-                           v
+                 AE command if available
+                    /              \
+             registered             no reliable command
+               command                    |
+                  |                        v
+                  |                  fresh AE frame
+                  |                        |
+                  |                        v
+                  |                 Qwen target grounding
+                  |                        |
+                  |                        v
+                  |                 freshness + geometry guard
+                  |                        |
+                  +------------+-----------+
+                               v
+                           Hands action
+                               |
+                               v
+                           Eyes frame
+                               |
+                               v
                     visible-state verification
-                           |
-                   continue / done / blocked
+                               |
+                      continue / done / blocked
 ```
 
 ## Safety contract
@@ -49,7 +54,9 @@ Before a pointer action:
 - A deterministic Task Policy independently authorizes the action impact before Hands execution; model planning cannot self-authorize project mutation.
 - Every planned action must state a visible expected result for post-action verification.
 
-The proof/default `safe_mode` adds another layer: destructive target descriptions are rejected, text entry and double-click are disabled, scroll magnitude is bounded, and only reversible navigation keyboard actions are allowed.
+Registered AE commands add a deterministic branch without bypassing these guarantees. The planner may name only a command key present in the shared registry; the registry supplies the exact physical recipe and declared impact. Unknown/invented command keys fail before execution. Mutating commands remain subject to the M4 task contract.
+
+The proof/default `safe_mode` adds another layer: destructive target descriptions are rejected, text entry and double-click are disabled, scroll magnitude is bounded, and only reversible navigation keyboard actions or registered reversible-UI AE commands are allowed.
 
 ## Current action vocabulary
 
@@ -63,8 +70,26 @@ The generalized planner can choose:
 - type
 - wait
 - drag
+- `ae_command`
+
+`ae_command` is the preferred route when the shared registry already exposes the needed After Effects operation. The planner never supplies the underlying shortcut itself; it names a registered semantic command such as `property.scale.reveal`, `panel.effects_presets.toggle`, `time.frame.forward`, or `mask.new`.
+
+The registry can grow far beyond what should be injected into every model call. `command_keys_for_goal()` therefore selects a bounded, goal-relevant command subset plus a small common baseline. This gives M3 broad command knowledge without turning a 140+ command registry into a warm-loop latency penalty.
 
 Drag is grounded as two independent semantic targets (source and destination) from the same Eyes frame, converted through the physical-pixel coordinate bridge, and executed as a smooth Hands path. In safe mode, drag is limited to reversible UI-state targets such as the playhead/current-time indicator, scrollbars, and panel dividers.
+
+## M3 command-first rule
+
+For every controller action, prefer:
+
+1. a registered native AE command that directly reaches the required state;
+2. Quick Apply when it is the appropriate AE-native search doorway;
+3. semantic Eyes + Hands navigation;
+4. new custom UI tooling only when AE itself has no reliable path.
+
+The controller remains visual and feedback-driven. A command says **how to reach a state efficiently**; Eyes and the reasoning layer still determine whether the command is contextually appropriate and whether the visible outcome is correct.
+
+See `docs/AE_COMMAND_SURFACE_V1.md` for the cross-milestone contract.
 
 ## Live proof
 
@@ -100,7 +125,7 @@ See `docs/TASK_POLICY_V1.md` for the action-impact authorization contract.
 
 M4 extends the same Controller rather than creating another control plane. A caller can attach an `EditingTaskContract` that binds mutation authority to one exact goal, explicit mutation kinds, optional target terms, and a finite mutation budget.
 
-Without that contract, `LiveController` remains UI-only even if `safe_mode=False` is passed. With the contract, the planner may propose non-destructive editing actions, but deterministic Task Policy and task-scope checks must both pass before Hands sees the action.
+Without that contract, `LiveController` remains UI-only even if `safe_mode=False` is passed. With the contract, the planner may propose non-destructive editing actions, including registered AE-native mutation commands, but deterministic Task Policy and task-scope checks must both pass before Hands sees the action.
 
 For each authorized project mutation, the controller captures pre-mutation visual evidence. The mutation is committed only if fresh post-action Eyes evidence satisfies its visible expected state. Failed verification, failed post-action capture, or foreground loss after a mutation triggers the predefined `Ctrl+Z` rollback path and deterministic visual comparison with the pre-mutation frame. The controller stops after rollback instead of continuing from uncertain project state.
 
@@ -108,4 +133,4 @@ See `docs/EDITING_TASK_V1.md` for the full M4 contract.
 
 ## Next M4 proof
 
-The code/contract gate is followed by a real After Effects proof: execute one bounded project mutation under an explicit contract, verify a successful commit, deliberately exercise the failed-verification rollback path, verify visual restoration, and reuse the existing After Effects process throughout.
+The code/contract gate is followed by a real After Effects proof: execute one bounded project mutation under an explicit contract, preferably using a registered AE-native command where appropriate, verify a successful commit, deliberately exercise the failed-verification rollback path, verify visual restoration, and reuse the existing After Effects process throughout.
