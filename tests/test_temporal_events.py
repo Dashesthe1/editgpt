@@ -114,3 +114,25 @@ def test_semantic_repeat_reuses_exact_frame_cache(tmp_path: Path) -> None:
     assert second.bracket == first.bracket
     assert semantic.calls == calls
     assert semantic.images == images
+
+
+class _GuidedReader(_Reader):
+    def __init__(self, path: Path) -> None:
+        super().__init__(path)
+        self.guided_calls: list[tuple[list[int], list[float]]] = []
+
+    def read_frames_at_timestamps(self, indices, timestamps_s):
+        self.guided_calls.append((list(indices), list(timestamps_s)))
+        return self.read_frames(indices)
+
+
+def test_semantic_search_uses_timestamp_guided_source_reads(tmp_path: Path) -> None:
+    path = tmp_path / "guided-fixture.mp4"
+    path.write_bytes(b"fixture")
+    reader = _GuidedReader(path)
+    analyzer = TemporalAnalyzer(prefer_transnet=False, semantic_client=_Semantic())
+    analyzer._profiles[analyzer._cache_key(path)] = _profile(path)
+    result = analyzer.find_event(reader, event_type="appearance", description="the subject is visible")
+    assert result.found is True
+    assert reader.guided_calls
+    assert all(len(indices) == len(timestamps) for indices, timestamps in reader.guided_calls)

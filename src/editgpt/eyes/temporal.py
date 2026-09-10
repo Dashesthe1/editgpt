@@ -431,6 +431,8 @@ class TemporalAnalyzer:
         reader: VideoSourceReader,
         indices: list[int],
         description: str,
+        *,
+        profile: TemporalProfile | None = None,
     ) -> tuple[dict[int, tuple[bool, float, str]], tuple[int, ...], str | None]:
         unique = sorted(set(int(index) for index in indices))
         path = Path(reader.metadata.path).resolve()
@@ -440,20 +442,22 @@ class TemporalAnalyzer:
         missing = [i for i in unique if i not in cached]
         if not missing:
             return cached, tuple(unique), None
-        frames = reader.read_frames(missing)
+        guided = getattr(reader, "read_frames_at_timestamps", None)
+        if profile is not None and callable(guided):
+            frames = guided(missing, [float(profile.timestamps_s[i]) for i in missing])
+        else:
+            frames = reader.read_frames(missing)
         labels = [f"index={frame.frame_id} time={frame.metadata.get('source_time_s', 0.0):.6f}s" for frame in frames]
-        prompt = f'''For each chronological source-video frame independently decide whether this visible statement is true in that exact frame:
+        prompt = f'''For each supplied exact source-video frame independently decide whether this complete visible statement is true:
 "{description}"
-Use only visible evidence. Do not infer between frames.
-Require the complete statement to be visibly established. A visible attribute, clothing detail, prop, or nearby object alone does not prove the described person/action/relation is visible.
-Return JSON only as {{"frames":[{{"index":123,"match":true,"confidence":0.0,"reason":"brief visible reason"}}],"uncertainty":"brief note or null"}}.
-Include exactly one item for every supplied index and preserve chronological order.'''
+Use only visible evidence in that frame. The complete statement must be visibly established; do not infer a person or subject from clothing, colors, objects, context, adjacent frames, or partial details alone.
+Return JSON only as {{"frames":[{{"index":123,"match":true,"confidence":0.95}}],"uncertainty":null}}. Include exactly one item for every supplied index in chronological order. Do not return per-frame reason text.'''
         observation = self._semantic().observe_images(
             [frame.image for frame in frames],
             prompt=prompt,
             labels=labels,
             source=reader.metadata.path,
-            max_tokens=max(180, 72 * len(frames)),
+            max_tokens=max(128, 18 * len(frames) + 40),
             max_width=384,
             jpeg_quality=80,
         )
@@ -522,9 +526,11 @@ Include exactly one item for every supplied index and preserve chronological ord
         boundary: tuple[int, int] | None = None
         previous_index: int | None = None
 
-        for offset in range(0, len(anchors), 12):
-            batch = anchors[offset : offset + 12]
-            values, checked, note = self._classify_indices(reader, batch, description)
+        offset = 0
+        batch_size = 12
+        while offset < len(anchors):
+            batch = anchors[offset : offset + batch_size]
+            values, checked, note = self._classify_indices(reader, batch, description, profile=profile)
             classified.update(values)
             evidence.update(checked)
             uncertainty = uncertainty or note
@@ -538,6 +544,8 @@ Include exactly one item for every supplied index and preserve chronological ord
             if boundary is not None:
                 break
             previous_index = batch[-1]
+            offset += len(batch)
+            batch_size = 4
 
         if boundary is None:
             return TemporalEventResult(
@@ -564,7 +572,7 @@ Include exactly one item for every supplied index and preserve chronological ord
             })
             if not samples:
                 break
-            values, checked, note = self._classify_indices(reader, samples, description)
+            values, checked, note = self._classify_indices(reader, samples, description, profile=profile)
             classified.update(values)
             evidence.update(checked)
             uncertainty = uncertainty or note
@@ -582,7 +590,7 @@ Include exactly one item for every supplied index and preserve chronological ord
             index
             for index in range(max(start, low - 1), min(end, high + 1) + 1)
         })
-        values, checked, note = self._classify_indices(reader, neighborhood, description)
+        values, checked, note = self._classify_indices(reader, neighborhood, description, profile=profile)
         classified.update(values)
         evidence.update(checked)
         uncertainty = uncertainty or note
