@@ -67,7 +67,8 @@ async def prove(eyes_url: str, hands_url: str) -> int:
                 print(started.content)
                 return 4
             started_eyes = True
-            await asyncio.sleep(0.5)
+            await hands.call_tool("hands_focus_after_effects", {})
+            await asyncio.sleep(0.15)
 
             frame_result = await eyes.call_tool("eyes_latest_frame", {"max_width": 1280, "jpeg_quality": 92})
             if frame_result.is_error:

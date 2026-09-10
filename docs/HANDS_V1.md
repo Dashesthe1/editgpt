@@ -67,7 +67,7 @@ Hands status/logging/proof are integrated into the same control plane:
 .\editgpt.ps1 -Action proof-hands
 ```
 
-`proof-hands` is intentionally non-destructive. It discovers the Hands MCP tools, arms Hands, focuses After Effects, reads the real cursor position, sends a move to that exact same coordinate, and disarms Hands. It does not click or type.
+`proof-hands` is intentionally non-destructive. It discovers the Hands MCP tools, arms Hands, focuses After Effects, reads the real cursor position, sends a move to that exact same coordinate, and disarms Hands. `proof-semantic-click` is the next guarded UI proof: Eyes captures AE, local Qwen grounds the File menu, Hands clicks it, Eyes verifies the dropdown opened, Hands presses Esc, and Eyes verifies it closed again.
 
 ## Controller compatibility
 

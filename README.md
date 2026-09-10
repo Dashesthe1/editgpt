@@ -123,6 +123,7 @@ Run the current proofs with:
 .\editgpt.ps1 -Action proof-hands
 .\editgpt.ps1 -Action proof-loop
 .\editgpt.ps1 -Action proof-semantic-pointer
+.\editgpt.ps1 -Action proof-semantic-click
 .\editgpt.ps1 -Action proof-semantic
 ```
 

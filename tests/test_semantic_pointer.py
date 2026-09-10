@@ -22,3 +22,13 @@ def test_semantic_pointer_rejects_out_of_bounds_coordinates() -> None:
             width=1280,
             height=720,
         )
+
+
+def test_semantic_pointer_converts_normalized_bbox_to_pixel_center() -> None:
+    target = SemanticPointerTarget.from_json_text(
+        '{"target":"File","bbox_2d":[20,60,40,90],"confidence":0.9,"reason":"visible"}',
+        width=1280,
+        height=720,
+    )
+    assert target.bbox_pixels == (26, 43, 51, 65)
+    assert (target.x, target.y) == (38, 54)
