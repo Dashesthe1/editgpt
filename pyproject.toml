@@ -27,6 +27,7 @@ dev = [
 [project.scripts]
 editgpt-eyes = "editgpt.cli:main"
 editgpt-eyes-mcp = "editgpt.mcp_server:main"
+editgpt-hands-mcp = "editgpt.hands_mcp_server:main"
 editgpt-control = "editgpt.orchestrator:main"
 
 [tool.pytest.ini_options]
