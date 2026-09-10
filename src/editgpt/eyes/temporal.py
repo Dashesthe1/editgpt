@@ -187,6 +187,7 @@ class TemporalAnalyzer:
         self._transnet_model: Any | None = None
         self._transnet_device: str | None = None
         self._transnet_error: str | None = None
+        self._semantic_cache: dict[tuple[str, int, int, str, int], tuple[bool, float, str]] = {}
 
     def _cache_key(self, path: Path) -> tuple[str, int, int]:
         stat = path.stat()
@@ -432,11 +433,19 @@ class TemporalAnalyzer:
         description: str,
     ) -> tuple[dict[int, tuple[bool, float, str]], tuple[int, ...], str | None]:
         unique = sorted(set(int(index) for index in indices))
-        frames = reader.read_frames(unique)
+        path = Path(reader.metadata.path).resolve()
+        source_key = self._cache_key(path)
+        normalized = " ".join(description.strip().lower().split())
+        cached = {i: self._semantic_cache[(source_key[0], source_key[1], source_key[2], normalized, i)] for i in unique if (source_key[0], source_key[1], source_key[2], normalized, i) in self._semantic_cache}
+        missing = [i for i in unique if i not in cached]
+        if not missing:
+            return cached, tuple(unique), None
+        frames = reader.read_frames(missing)
         labels = [f"index={frame.frame_id} time={frame.metadata.get('source_time_s', 0.0):.6f}s" for frame in frames]
         prompt = f'''For each chronological source-video frame independently decide whether this visible statement is true in that exact frame:
 "{description}"
 Use only visible evidence. Do not infer between frames.
+Require the complete statement to be visibly established. A visible attribute, clothing detail, prop, or nearby object alone does not prove the described person/action/relation is visible.
 Return JSON only as {{"frames":[{{"index":123,"match":true,"confidence":0.0,"reason":"brief visible reason"}}],"uncertainty":"brief note or null"}}.
 Include exactly one item for every supplied index and preserve chronological order.'''
         observation = self._semantic().observe_images(
@@ -444,9 +453,9 @@ Include exactly one item for every supplied index and preserve chronological ord
             prompt=prompt,
             labels=labels,
             source=reader.metadata.path,
-            max_tokens=max(240, 110 * len(frames)),
-            max_width=512,
-            jpeg_quality=84,
+            max_tokens=max(180, 72 * len(frames)),
+            max_width=384,
+            jpeg_quality=80,
         )
         payload = _extract_json_object(str(observation.text))
         items = payload.get("frames")
@@ -463,9 +472,12 @@ Include exactly one item for every supplied index and preserve chronological ord
             confidence = float(np.clip(float(item.get("confidence", 0.5)), 0.0, 1.0))
             reason = str(item.get("reason", "")).strip()
             result[index] = (match, confidence, reason)
-        missing = [index for index in unique if index not in result]
-        if missing:
-            raise ValueError(f"semantic event response omitted requested indices: {missing}")
+        omitted = [index for index in missing if index not in result]
+        if omitted:
+            raise ValueError(f"semantic event response omitted requested indices: {omitted}")
+        result.update(cached)
+        for index in missing:
+            self._semantic_cache[(source_key[0], source_key[1], source_key[2], normalized, index)] = result[index]
         uncertainty_value = payload.get("uncertainty")
         uncertainty = None if uncertainty_value in (None, "", "null") else str(uncertainty_value)
         return result, tuple(unique), uncertainty
@@ -544,7 +556,7 @@ Include exactly one item for every supplied index and preserve chronological ord
 
         low, high = boundary
         while high - low > max(1, tolerance_frames):
-            sample_count = min(10, max(2, high - low - 1))
+            sample_count = min(4, max(2, high - low - 1))
             samples = sorted({
                 int(round(value))
                 for value in np.linspace(low + 1, high - 1, sample_count)
@@ -574,9 +586,10 @@ Include exactly one item for every supplied index and preserve chronological ord
         classified.update(values)
         evidence.update(checked)
         uncertainty = uncertainty or note
-        candidates = [index for index in neighborhood if values[index][0] is target]
-        index = min(candidates) if target and candidates else max(candidates) if candidates else high
-        confidence = classified.get(index, (target, 0.5, ""))[1]
+        index = high
+        if classified.get(index, (not target, 0.0, ""))[0] is not target:
+            raise RuntimeError("semantic refinement lost its target-state bracket invariant")
+        confidence = classified[index][1]
         return TemporalEventResult(
             event_type=event_type,
             found=True,
